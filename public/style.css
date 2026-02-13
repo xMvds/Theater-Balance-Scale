@@ -1,0 +1,1224 @@
+
+/* (zelfde file als je nu had, maar met 1 extra blok voor lockedAfterConfirm) */
+
+:root{
+  --bg:#0b0d12;
+  --panel:rgba(0,0,0,0.22);
+  --border:rgba(255,255,255,0.08);
+  --text:rgba(255,255,255,0.92);
+  --bad:rgba(255,65,65,0.95);
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+/* Reserve the vertical scrollbar to prevent a visible layout "knip" when
+   the scoreboard panel changes page height. */
+html{ overflow-y: scroll; background: var(--bg); }
+body{
+  margin:0;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  /* Base background color lives on html; body is transparent so our fixed glow layer sits behind content */
+  background: transparent;
+  color: var(--text);
+  position: relative;
+  z-index: 0;
+  overflow-x: hidden;
+}
+
+/* Background glow (fixed, oversized) so it never shows a hard "cut" edge when scrolling */
+body::before{
+  content:"";
+  position: fixed;
+  inset: -60vmax;
+  pointer-events: none;
+  z-index: -1;
+  background:
+    radial-gradient(1700px 1150px at 50% 18%, rgba(255,255,255,0.070) 0%, rgba(255,255,255,0.032) 38%, rgba(255,255,255,0.010) 68%, rgba(0,0,0,0) 92%),
+    radial-gradient(1200px 900px at 15% 78%, rgba(255,255,255,0.040) 0%, rgba(0,0,0,0) 70%),
+    radial-gradient(1200px 900px at 85% 78%, rgba(255,255,255,0.040) 0%, rgba(0,0,0,0) 70%);
+}
+
+/* Subtle vignette so the very bottom of the viewport never becomes a bright band */
+body::after{
+  content:"";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  background: linear-gradient(to bottom, rgba(11,13,18,0) 0%, rgba(11,13,18,0) 72%, rgba(11,13,18,0.65) 100%);
+}
+.hidden{display:none !important}
+
+/* When a tab is in the background, browsers throttle animations/timers.
+   We snap UI to its final state while hidden and also disable CSS motion so
+   you never "see" a delayed animation when returning to the tab. */
+body.noAnim #panelGame,
+body.noAnim .playerPanel,
+body.noAnim .scorePanel,
+body.noAnim .scorePanel *,
+body.noAnim .tile,
+body.noAnim .mathRow,
+body.noAnim .scoreNum{
+  transition: none !important;
+  animation: none !important;
+}
+
+.wrap{
+  min-height:100%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:18px;
+}
+
+
+.card{
+  width:min(760px, 100%);
+  border:1px solid var(--border);
+  /*
+    IMPORTANT:
+    The old outer box-shadow gets visibly "cut off" when the user scrolls
+    and the element approaches the viewport edge (browser clips shadows at
+    the viewport boundary). To avoid the hard cutoff, we render the depth
+    entirely INSIDE the card using inset shadows + an internal glow layer.
+  */
+  background:
+    radial-gradient(900px 520px at 50% 0%, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 42%, rgba(0,0,0,0) 88%),
+    var(--panel);
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,0.05),
+    inset 0 0 50px rgba(0,0,0,0.35);
+}
+
+.top{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-end;
+  padding:16px 16px 10px;
+  border-bottom:1px solid rgba(255,255,255,0.06);
+}
+.title{
+  letter-spacing:0.14em;
+  text-transform:uppercase;
+  font-size:14px;
+  color:rgba(255,255,255,0.85);
+}
+.subtitle{
+  margin-top:6px;
+  font-size:12px;
+  color:rgba(255,255,255,0.45);
+}
+
+.centerCol{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:16px;
+  padding:16px;
+}
+
+/* ===== Join ===== */
+.join{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:100%;
+  min-height: 240px;
+}
+.joinBox{
+  width:min(520px, 100%);
+  display:grid;
+  gap:10px;
+  padding:16px;
+  border:1px solid rgba(255,255,255,0.06);
+  background: var(--panel);
+}
+.joinHint{
+  font-size:12px;
+  color: rgba(255,255,255,0.45);
+  letter-spacing:0.02em;
+}
+
+.input{
+  width:100%;
+  padding:12px 12px;
+  font-size:14px;
+  border:1px solid rgba(255,255,255,0.10);
+  background: rgba(0,0,0,0.35);
+  color: var(--text);
+  outline:none;
+}
+.input:focus{ border-color: rgba(255,255,255,0.25); }
+
+/* ===== Buttons ===== */
+.btn{
+  padding:10px 12px;
+  border:1px solid rgba(255,255,255,0.12);
+  background: rgba(0,0,0,0.25);
+  color: rgba(255,255,255,0.85);
+  cursor:pointer;
+}
+.btn.primary{
+  border-color: rgba(255,255,255,0.25);
+  background: rgba(255,255,255,0.08);
+}
+.btn:disabled{ opacity:0.45; cursor:not-allowed; }
+
+.confirmRow{ width:100%; display:flex; justify-content:center; }
+.btn.confirm{
+  width:min(320px, 92%);
+  padding:14px 18px;
+  font-size:14px;
+  letter-spacing:0.12em;
+  text-transform:uppercase;
+}
+#confirmRow{ margin-top:18px; margin-bottom:14px; }
+
+/* ===== Lobby ===== */
+.lobbyMsg{
+  width:min(620px, 100%);
+  border:1px solid rgba(255,255,255,0.06);
+  background: var(--panel);
+  padding:14px;
+  text-align:center;
+  font-size:12px;
+  color: rgba(255,255,255,0.75);
+  letter-spacing:0.04em;
+  text-transform:uppercase;
+}
+
+/* ===== Panels ===== */
+#panelGame{
+  transition: transform 1400ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+.playerPanel{
+  width:min(980px, 100%);
+  border:1px solid rgba(255,255,255,0.06);
+  background: var(--panel);
+  padding:14px;
+  /* Slower + smoother for panel expand/collapse */
+  transition: transform 1400ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+.playerPanelTitle{
+  font-size:12px;
+  letter-spacing:0.12em;
+  text-transform:uppercase;
+  color: rgba(255,255,255,0.62);
+  margin-bottom:10px;
+  text-align:center;
+}
+
+/* ===== Score panel fade (Player reveal) ===== */
+.scorePanel{
+  /* Inside the same player panel: no separate background/border box. */
+  margin-top:16px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+
+  /* Smooth open/close without max-height snapping. */
+  display:grid;
+  grid-template-rows:0fr;
+  transition: grid-template-rows 1300ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.scorePanel .scoreInner{
+  overflow:hidden;
+  padding-top:16px;
+  /* Extra breathing room so the math row and tile shadows never look clipped */
+  padding-bottom:24px;
+}
+
+.scorePanel.scoreOpen{
+  grid-template-rows:1fr;
+}
+
+
+.scorePanel .board{
+  padding: 0 12px;
+}
+
+.scorePanel .tiles{
+  display:flex;
+  gap:12px;
+  justify-content:center;
+  flex-wrap:wrap;
+  opacity:0;
+  transition: opacity 700ms ease;
+}
+
+.scorePanel.scoreShown .tiles{
+  opacity:1;
+}
+
+.scorePanel .tile{
+  /* Slightly smaller tiles (keep text sizes the same) */
+  width:190px;
+  height:140px;
+  padding:14px 16px;
+  border:1px solid rgba(255,255,255,0.12);
+  background:rgba(0,0,0,0.34);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06), inset 0 0 60px rgba(0,0,0,0.55);
+  display:flex;
+  flex-direction:column;
+  justify-content:flex-start;
+}
+
+.scorePanel .tile .name{
+  font-size:18px;
+  letter-spacing:0.12em;
+  opacity:0.85;
+}
+
+.scorePanel .tile .num{
+  margin-top:16px;
+  font-size:54px;
+  text-align:center;
+  letter-spacing:0.04em;
+}
+
+.scorePanel .tile .d1,
+.scorePanel .tile .d2{
+  margin-top:10px;
+  font-size:18px;
+  text-align:center;
+  opacity:0.85;
+}
+
+.scorePanel .tile .dNeg{ color: #ff4d4d; }
+.scorePanel .tile .dZero{ color: #8a8a8a; }
+
+.scorePanel .mathRow{
+  margin-top:14px;
+  text-align:center;
+  font-size:22px;
+  /* Fade only (no slide) so it can never clip */
+  transform:none;
+}
+
+/* ===== Grid ===== */
+.gridWrap{
+  width:100%;
+  display:flex;
+  justify-content:center;
+  transition: transform 420ms ease, opacity 420ms ease;
+}
+.grid{
+  width:min(520px, 92vw);
+  aspect-ratio: 1 / 1;
+  display:grid;
+  grid-template-columns: repeat(10, 1fr);
+  grid-auto-rows: 1fr;
+  gap:2px;
+  border:1px solid rgba(255,255,255,0.08);
+  background: rgba(0,0,0,0.35);
+}
+.cell{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:12px;
+  letter-spacing:0.06em;
+  user-select:none;
+  cursor:pointer;
+  background: rgba(0,0,0,0.55);
+  color: rgba(255,255,255,0.50);
+  transition: transform 200ms ease, background 200ms ease, color 200ms ease, opacity 200ms ease, box-shadow 200ms ease;
+}
+.cell.empty{
+  cursor:default;
+  opacity:0.18;
+  background: rgba(0,0,0,0.40);
+}
+.cell.selected,
+.cell.confirmed{
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.92);
+  transform: translateY(-1px);
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.10), 0 0 22px rgba(255,255,255,0.10);
+}
+.grid.locked .cell{ cursor:default; }
+
+.grid.revealLock{
+  filter: brightness(0.92);
+}
+.grid.revealLock .cell{ cursor:default; }
+
+/* >>> Nieuw: na bevestigen niet meer klikbaar <<< */
+.grid.lockedAfterConfirm .cell{
+  pointer-events:none;
+  cursor:default;
+}
+
+.grid.hasConfirmed .cell:not(.confirmed):not(.empty){
+  opacity:0.14;
+  color: rgba(255,255,255,0.14);
+  background: rgba(0,0,0,0.52);
+}
+
+/* cascade */
+.grid.cascading .cell{ opacity:0; transform: translateY(8px); }
+.cell.appear{
+  opacity:1;
+  transform: translateY(0);
+  animation: cellIn 480ms ease forwards;
+}
+@keyframes cellIn{
+  from{opacity:0; transform: translateY(10px);}
+  to{opacity:1; transform: translateY(0);}
+}
+.grid.animating .cell{ pointer-events:none !important; }
+
+/* ===== Rules ===== */
+.rules{
+  width:100%;
+  border:1px solid rgba(255,255,255,0.06);
+  background: var(--panel);
+  padding:12px;
+  margin-top:14px;
+}
+.rulesTitle{
+  font-size:12px;
+  letter-spacing:0.10em;
+  text-transform:uppercase;
+  color: rgba(255,255,255,0.65);
+  margin-bottom:8px;
+}
+.ruleItem{
+  font-size:12px;
+  color: rgba(255,255,255,0.72);
+  padding:6px 0;
+  border-top:1px solid rgba(255,255,255,0.06);
+}
+.ruleItem:first-of-type{ border-top:none; }
+
+.ruleItem.pulseOnce{
+  animation: rulePulseSoft 1.6s ease-in-out infinite;
+}
+@keyframes rulePulseSoft{
+  0%{
+    color: rgba(255,255,255,0.58);
+    text-shadow:
+      0 0 10px rgba(255,255,255,0.16),
+      0 0 24px rgba(255,255,255,0.08);
+  }
+  50%{
+    color: rgba(255,255,255,0.98);
+    text-shadow:
+      0 0 26px rgba(255,255,255,0.55),
+      0 0 90px rgba(255,255,255,0.30),
+      0 0 150px rgba(255,255,255,0.16);
+  }
+  100%{
+    color: rgba(255,255,255,0.58);
+    text-shadow:
+      0 0 10px rgba(255,255,255,0.16),
+      0 0 24px rgba(255,255,255,0.08);
+  }
+}
+
+/* ===== Scoreboard ===== */
+.board{
+  width:100%;
+  border:1px solid rgba(255,255,255,0.06);
+  background: var(--panel);
+  padding:12px;
+}
+
+/* Player: the scoreboard 'board' wrapper is only a layout helper;
+   keep it visually neutral so tiles sit in the same panel as the math row. */
+#playView #scoreboard.board{
+  background: transparent;
+  border: 0;
+  padding: 0;
+  box-shadow: none;
+}
+
+
+.tiles{
+  display:flex;
+  gap:10px;
+  justify-content:center;
+  flex-wrap:wrap;
+  overflow:visible;
+  padding-bottom:6px;
+}
+@media (max-width: 520px){
+  .tiles{
+    flex-wrap:nowrap;
+    overflow-x:auto;
+    scrollbar-width:none;
+  }
+  .tiles::-webkit-scrollbar{ display:none; }
+}
+
+/* ===== Tiles ===== */
+.tile{
+  flex: 0 0 auto;
+  width: 170px;
+  border:1px solid rgba(255,255,255,0.08);
+  background: rgba(0,0,0,0.30);
+  padding:10px;
+  opacity:0;
+  transform: translateY(10px);
+  transition: opacity 520ms ease, transform 520ms ease, box-shadow 520ms ease, border-color 520ms ease;
+}
+.tile.show{ opacity:1; transform: translateY(0); }
+
+/* Player request: scoreboard tiles should only fade (no slide/move) */
+#playView .tile{
+  transform: none;
+  transition: opacity 520ms ease, box-shadow 520ms ease, border-color 520ms ease, background 520ms ease;
+}
+#playView .tile.show{
+  transform: none;
+}
+
+/* Iets compacter op player-scherm (maar tekstgroottes gelijk houden) */
+#playView #scoreTiles .tile{
+  width: 150px;
+}
+
+.tile.dead{
+  border-color: rgba(255,70,70,0.25);
+}
+.tile.winner{
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12), inset 0 0 26px rgba(255,255,255,0.08);
+}
+
+.tName{
+  font-size:12px;
+  letter-spacing:0.08em;
+  text-transform:uppercase;
+  color: rgba(255,255,255,0.80);
+  margin-bottom:8px;
+}
+.tGuess{
+  font-size:28px;
+  letter-spacing:0.06em;
+  color: rgba(255,255,255,0.92);
+  text-align:center;
+  padding:6px 0 10px;
+}
+.tScoreWrap{
+  position:relative;
+  /* Slightly taller so negative scores never get clipped on some fonts/zoom levels */
+  height:22px;
+  overflow:hidden;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.scoreNum{
+  position:absolute;
+  left:0; right:0;
+  text-align:center;
+  font-weight:700;
+  letter-spacing:0.06em;
+  font-size:12px;
+  line-height:22px;
+  opacity:0.85;
+  transition: transform 900ms ease, opacity 1100ms ease;
+}
+
+/* Player scoreboard total score thinner */
+.scorePanel .scoreNum{ font-weight:500; }
+
+.scoreNum.good{ color: rgba(255,255,255,0.86); }
+.scoreNum.bad{ color: var(--bad); }
+
+.scoreNum.live{ transform: translateY(0); opacity:0.88; }
+.scoreNum.out{ transform: translateY(12px); opacity:0; }
+.scoreNum.in{ transform: translateY(-10px); opacity:0; }
+
+.tDelta{
+  margin-top:10px;
+  font-size:12px;
+  text-align:center;
+  color: rgba(255,255,255,0.50);
+}
+.tDelta.bad{ color: var(--bad); }
+
+/* ===== Math row ===== */
+.mathRow{
+  width:100%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  margin-top:10px;
+  opacity:0;
+  transform: translateY(10px);
+  transition: opacity 650ms ease, transform 650ms ease;
+}
+.mathRow.show{
+  opacity:1;
+  transform: translateY(0);
+}
+
+/* Player: math row should fade only (no slide), matching the score tiles. */
+#playView .mathRow{
+  transform: none;
+  transition: opacity 700ms ease;
+}
+#playView .mathRow.show{
+  transform: none;
+}
+.mathBox{
+  border:1px solid rgba(255,255,255,0.08);
+  background: rgba(0,0,0,0.26);
+  padding:10px 12px;
+  min-width: 160px;
+  text-align:center;
+}
+.mathLabel{
+  font-size:11px;
+  letter-spacing:0.10em;
+  text-transform:uppercase;
+  color: rgba(255,255,255,0.60);
+}
+.mathValue{
+  margin-top:6px;
+  font-size:18px;
+  letter-spacing:0.06em;
+  color: rgba(255,255,255,0.92);
+}
+.mathOp{
+  color: rgba(255,255,255,0.70);
+  letter-spacing:0.10em;
+  text-transform:uppercase;
+}
+
+/* ===== Dead theme ===== */
+body.deadTheme{
+  box-shadow:
+    inset 0 0 0 2px rgba(255,70,70,0.38),
+    inset 0 0 80px rgba(255,40,40,0.16),
+    inset 0 0 240px rgba(255,20,20,0.09);
+}
+body.deadTheme .playerPanel{
+  border-color: rgba(255,70,70,0.34);
+  box-shadow:
+    0 0 0 1px rgba(255,70,70,0.14),
+    0 0 40px rgba(255,40,40,0.12);
+}
+
+.deadNoise{
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  display:none;
+  background-image:
+    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="320" height="320"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="2.05" numOctaves="6" stitchTiles="stitch"/></filter><rect width="320" height="320" filter="url(%23n)"/></svg>');
+  opacity:0.055;
+  mix-blend-mode: screen;
+  filter: contrast(210%) brightness(116%);
+  animation: tvSnow 0.070s steps(2) infinite;
+}
+.deadNoise.on{display:block;}
+@keyframes tvSnow{
+  0%{transform: translate(0,0) scale(1.12)}
+  25%{transform: translate(-10px,6px) scale(1.12)}
+  50%{transform: translate(8px,-10px) scale(1.12)}
+  75%{transform: translate(-8px,-6px) scale(1.12)}
+  100%{transform: translate(10px,8px) scale(1.12)}
+}
+
+/* ===== Survived ===== */
+body.survivedTheme{
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,0.18),
+    inset 0 0 90px rgba(255,255,255,0.12),
+    inset 0 0 280px rgba(255,255,255,0.08);
+}
+.survivedFx{
+  position:fixed; inset:0;
+  pointer-events:none;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  z-index: 40;
+}
+.survivedFx.hidden{ display:none; }
+.survivedFx::before{
+  content:"";
+  position:fixed;
+  inset:0;
+  /* Blur everything behind (but NOT the survived text/glow). */
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  background: rgba(0,0,0,0.10);
+}
+.survivedText{
+  position: relative;
+  z-index: 1;
+  font-size:30px;
+  letter-spacing:0.24em;
+  text-transform:uppercase;
+  color: rgba(255,255,255,0.92);
+  text-shadow:
+    0 0 14px rgba(255,255,255,0.18),
+    0 0 44px rgba(255,255,255,0.10);
+  border:1px solid rgba(255,255,255,0.18);
+  background: rgba(0,0,0,0.18);
+  padding:18px 22px;
+  animation: survivedBreath 1.6s ease-in-out infinite;
+}
+@keyframes survivedBreath{
+  0%,100%{ transform: scale(0.985); opacity:0.82; }
+  50%{ transform: scale(1.02); opacity:1; }
+}
+
+/* ===== Host page ===== */
+.hostPage .wrap{ display:none; }
+.hostWrap{
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 14px;
+  min-height: 100vh;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  gap:10px;
+}
+.hostHeader{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  align-items:center;
+  justify-content:space-between;
+  border:1px solid rgba(255,255,255,0.06);
+  background: var(--panel);
+  padding:10px 10px;
+}
+.hostTitle{
+  letter-spacing:0.16em;
+  text-transform:uppercase;
+  font-size:13px;
+  color: rgba(255,255,255,0.82);
+}
+.hostHint{ font-size:12px; color: rgba(255,255,255,0.55); }
+.hostBtns{ display:flex; gap:6px; flex-wrap:wrap; }
+
+.hostTiles{
+  display:flex;
+  gap:8px;
+  justify-content:center;
+  flex-wrap:wrap;
+}
+.hostWrap .mathRow{ width:100%; justify-content:center; }
+
+.hostTile .tHeadRow{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.kickBtn{
+  width:26px;
+  height:26px;
+  line-height:26px;
+  text-align:center;
+  border:1px solid rgba(255,255,255,0.12);
+  background: rgba(0,0,0,0.35);
+  color: rgba(255,255,255,0.80);
+  cursor:pointer;
+  padding:0;
+}
+.kickBtn.armed{
+  border-color: rgba(255,255,255,0.22);
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.10), 0 0 18px rgba(255,255,255,0.10);
+}
+.kickBtn:hover{
+  border-color: rgba(255,255,255,0.22);
+  background: rgba(255,255,255,0.06);
+}
+
+/* host rules */
+.rulesHost{
+  border:1px solid rgba(255,255,255,0.06);
+  background: var(--panel);
+  padding:12px;
+}
+.rhTitle{
+  font-size:12px;
+  letter-spacing:0.10em;
+  text-transform:uppercase;
+  color: rgba(255,255,255,0.65);
+  margin-bottom:10px;
+}
+.rhItem{
+  border-top:1px solid rgba(255,255,255,0.06);
+  padding:10px 0;
+}
+.rhItem:first-of-type{ border-top:none; }
+.rhHead{
+  font-size:12px;
+  letter-spacing:0.08em;
+  text-transform:uppercase;
+  color: rgba(255,255,255,0.78);
+  margin-bottom:6px;
+}
+.rhBody{
+  font-size:12px;
+  color: rgba(255,255,255,0.68);
+  line-height:1.35;
+}
+.rhItem.pulseOnce .rhHead,
+.rhItem.pulseOnce .rhBody{
+  animation: rulePulseSoft 1.6s ease-in-out infinite;
+}
+
+/* Host status colors */
+.rulesHost .status.active{ color: rgba(120,255,170,0.92); }
+.rulesHost .status.inactive{ color: rgba(255,110,110,0.92); }
+
+/* ===== Info page ===== */
+.infoPage .infoBlackout{
+  position:fixed; inset:0;
+  background:#000;
+}
+.infoPage .infoStage{
+  position:fixed; inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:20px;
+  opacity:0;
+  transition: opacity 1800ms ease, box-shadow 1400ms ease;
+}
+.infoPage .infoStage.visible{ opacity:1; }
+
+.infoFrame{
+  width:min(1800px, 98vw);
+  height:min(980px, 96vh);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:26px;
+}
+
+.infoContent{
+  width:100%;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:22px;
+  opacity:0;
+  transform: translateY(10px);
+  transition: opacity 1800ms ease, transform 1400ms ease, text-shadow 1400ms ease;
+}
+.infoContent.show{
+  opacity:1;
+  transform: translateY(0);
+}
+
+.infoTiles{
+  width:100%;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  gap:18px;
+  flex-wrap:wrap;
+  overflow:visible;
+}
+.infoTiles .tile{
+  width: min(420px, 30vw);
+  padding:22px;
+}
+.infoTiles .tName{
+  font-size:18px;
+  margin-bottom:12px;
+}
+.infoTiles .tGuess{
+  font-size:72px;
+  padding:10px 0 18px;
+}
+.infoTiles .scoreNum{
+  font-size:22px;
+}
+.infoTiles .tDelta{
+  font-size:18px;
+  margin-top:14px;
+}
+.infoTiles .tScoreWrap{ height:28px; }
+
+/* Round rules overlay — groot, geen vakje */
+.infoRoundRules{
+  position:fixed;
+  inset:0;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  padding:40px;
+  color: rgba(255,255,255,0.94);
+  pointer-events:none;
+  opacity:0;
+  transition: opacity 1200ms ease;
+}
+.infoRoundRules.show{ opacity:1; }
+.infoRoundRules.fadeOut{ opacity:0; }
+
+.infoRoundRules .rrTitle{
+  font-size:44px;
+  letter-spacing:0.26em;
+  text-transform:uppercase;
+  opacity:0.95;
+  margin-bottom:26px;
+  text-shadow:
+    0 0 30px rgba(255,255,255,0.30),
+    0 0 120px rgba(255,255,255,0.18);
+}
+.infoRoundRules .rrBig{
+  width:min(1600px, 96vw);
+  display:grid;
+  gap:22px;
+}
+.infoRoundRules .rrLine{
+  font-size:46px;
+  line-height:1.12;
+  letter-spacing:0.03em;
+  text-align:center;
+  text-shadow:
+    0 0 34px rgba(255,255,255,0.35),
+    0 0 160px rgba(255,255,255,0.20);
+}
+@media (max-width: 900px){
+  .infoRoundRules .rrTitle{ font-size:30px; }
+  .infoRoundRules .rrLine{ font-size:26px; }
+}
+
+
+/* =========================
+   INFO SCREEN — REVEAL ANIMATION (V2)
+   ========================= */
+
+.infoScene{
+  width:100%;
+  height:100%;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:18px;
+  opacity:1;
+}
+
+.infoNamesRow,
+.infoGuessesRow,
+.infoScoresRow,
+.infoDeltasRow{
+  width:100%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:16px;
+  flex-wrap:wrap;
+}
+
+
+/* Keep scores/deltas a bit closer by default (no layout jump when revealed) */
+.infoScoresRow,
+.infoDeltasRow{ margin-top:-10px; }
+
+/* Winner highlight (INFO): subtle glow around the winner tile/name */
+.infoGuessTile.winner .guessNum{
+  text-shadow: 0 0 18px rgba(255,255,255,.35);
+}
+.infoGuessTile.winner{
+  box-shadow: 0 0 0 1px rgba(255,255,255,.22), 0 0 28px rgba(255,255,255,.14);
+}
+.infoName.winner{
+  text-shadow: 0 0 18px rgba(255,255,255,.28);
+}
+
+/* Reserve space for all rows to avoid any final layout 'knip'.
+   We only animate opacity/transform, not height. */
+.infoNamesRow,
+.infoScoresRow,
+.infoDeltasRow{
+  height: 56px;
+  opacity:0;
+  overflow:hidden;
+  transform: translateY(-6px);
+  transition: opacity 1400ms ease, transform 1400ms ease;
+}
+
+.infoCell{
+  width: clamp(220px, 15vw, 360px);
+  text-align:center;
+}
+
+.infoScore,
+.infoDelta{
+  position:relative;
+  height:44px;
+}
+
+.infoName{
+  font-size:30px;
+  font-weight:400;
+  letter-spacing:.06em;
+  opacity:0;
+  transform: translateY(6px);
+  transition: opacity 1800ms ease, transform 1400ms ease, text-shadow 1400ms ease;
+}
+
+.infoGuessTile{
+  border:1px solid rgba(255,255,255,.08);
+  background: rgba(0,0,0,.35);
+  padding:24px 12px;
+  opacity:0;
+  transition: opacity 1800ms ease, box-shadow 1400ms ease;
+}
+
+.infoGuessTile .guessNum{
+  font-size:84px;
+  transition: text-shadow 1400ms ease;
+  font-weight:700;
+  line-height:1;
+  color: rgba(255,255,255,.92);
+}
+
+.infoScore, .infoDelta{
+  opacity:0;
+  transform: translateY(6px);
+  transition: opacity 1800ms ease, transform 1400ms ease, text-shadow 1400ms ease;
+}
+
+/* Score animatie wrapper (zoals scoreNum) */
+.infoScore{ position:relative; height:32px; overflow:hidden; }
+.infoScore .scoreNum{ font-size:26px; font-weight:800; }
+.infoDelta .deltaNum{ font-weight:500; }
+
+
+/* Delta animatie wrapper (zoals score) */
+.infoDelta{ position:relative; height:32px; overflow:hidden; }
+.infoDelta .deltaNum{
+  position:absolute;
+  left:0; right:0;
+  text-align:center;
+  font-weight:800;
+  letter-spacing:.04em;
+  font-size:26px;
+  opacity:0.88;
+  transition: transform 900ms ease, opacity 1100ms ease;
+  color: rgba(210,210,210,.85);
+}
+.infoDelta .deltaNum.bad{ color: rgba(255,70,70,.95); }
+.infoDelta .deltaNum.neutral{ color: rgba(210,210,210,.75); }
+.infoDelta .deltaNum.live{ transform: translateY(0); opacity:0.92; }
+.infoDelta .deltaNum.out{ transform: translateY(14px); opacity:0; }
+.infoDelta .deltaNum.in{ transform: translateY(-12px); opacity:0; }
+
+
+.infoMathRow .mathValue{
+  font-size: clamp(32px, 3.6vw, 50px);
+  letter-spacing:0.04em;
+}
+/* math row (staged) */
+/* Math row (absolute staged: avg -> op -> target) */
+.infoMathRow{
+  --mathGap: 420px;
+  position:relative;
+  width:100%;
+  height:0px; /* collapsed in step 1 so guesses are truly centered */
+  margin-top:0;
+  opacity:0;
+  transform: translateY(14px);
+  transition: opacity 1800ms ease, transform 1400ms ease, height 1400ms ease, margin-top 1400ms ease;
+}
+.infoMathRow > *{ position:absolute; top:50%; left:50%; }
+
+.bigMath{
+  width: clamp(280px, 18vw, 420px);
+  padding:18px 16px;
+  transform: translate(-50%, -50%);
+  opacity:0;
+  transition: opacity 1400ms ease, transform 1400ms ease;
+}
+
+
+.bigMathOp{
+  font-size:44px;
+  font-weight:400;
+  letter-spacing:0.04em;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  opacity:0;
+  transform: translate(-50%, -50%);
+  clip-path: inset(0 100% 0 0);
+}
+
+
+@keyframes infoOpReveal{
+  from{ clip-path: inset(0 100% 0 0); opacity:0.0; }
+  to  { clip-path: inset(0 0 0 0); opacity:1; }
+}
+
+.infoScene.ready .infoGuessesRow{ /* keep stable layout */ }
+
+.infoScene.s1 .infoGuessTile{
+  opacity:1;
+}
+.infoScene.s1 .infoNamesRow{ opacity:1; transform: translateY(0); }
+.infoScene.s1 .infoName{ opacity:1; transform: translateY(0); }
+
+.infoScene.s2 .infoGuessesRow{
+  transform: translateY(-16px);
+  transition: transform 1800ms ease;
+}
+.infoScene.s2 .infoMathRow{
+  height:140px;
+  margin-top:10px;
+  opacity:1;
+  transform: translateY(-34px);
+}
+
+/* s2: alleen gemiddelde gecentreerd */
+
+/* Target start al op rechts (alleen opacity/y animatie) */
+#infoTargetBox{
+  transform: translate(calc(-50% + var(--mathGap, 320px)), -50%);
+  opacity:0;
+}
+.infoScene.s2 #infoAvgBox{
+  opacity:1;
+  transform: translate(-50%, -50%);
+}
+
+/* s3a: gemiddelde schuift links */
+.infoScene.s3a #infoAvgBox{
+  transform: translate(calc(-50% - var(--mathGap, 320px)), -50%);
+}
+.infoScene.s3 .bigMathOp{
+  opacity:1;
+  animation: infoOpReveal 1200ms ease forwards;
+}
+
+/* Instant final-state (e.g. info refreshed after reveal is already done):
+   do NOT replay any fades/left-to-right reveals. */
+.infoScene.instant,
+.infoScene.instant *{
+  transition: none !important;
+  animation: none !important;
+}
+.infoScene.instant .bigMathOp{
+  clip-path: inset(0 0 0 0) !important;
+  opacity: 1 !important;
+}
+
+/* s3b: target verschijnt rechts */
+.infoScene.s3b #infoTargetBox{
+  opacity:1;
+  transform: translate(calc(-50% + var(--mathGap, 320px)), -50%);
+}
+
+
+/* s4a: math row makes room (moves down) BEFORE scores appear */
+/* Pre-expand rows during s4a (still invisible) to avoid any "knip" when s4 turns them on. */
+.infoScene.s4a .infoMathRow{
+  transform: translateY(10px);
+  transition: transform 1600ms ease;
+}
+
+/* s4: reveal names + scores + deltas */
+
+/* In the final stage, keep guesses slightly up but avoid overlap with names */
+.infoScene.s4 .infoGuessesRow{
+  transform: translateY(-10px);
+}
+
+.infoScene.s4 .infoMathRow{
+  transform: translateY(18px);
+}
+
+.infoScene.s4 .infoScoresRow,
+.infoScene.s4 .infoDeltasRow{ opacity:1; transform: translateY(0); }
+.infoScene.s4 .infoName,
+.infoScene.s4 .infoScore,
+.infoScene.s4 .infoDelta{
+  opacity:1;
+  transform: translateY(0);
+}
+
+/* Now that we are in s4, allow these rows to take space */
+
+/* Make the whole block feel centered even with wrapping */
+.infoFrame{
+  width:min(1800px, 98vw);
+  height:min(980px, 96vh);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:18px;
+}
+
+/* Ensure old infoContent doesn't affect layout (legacy) */
+.infoContent{ display:none !important; }
+.infoTiles{ display:none !important; }
+
+
+/* INFO tweaks v10 */
+.infoPage .mathLabel{ font-size: clamp(12px, 1.2vw, 16px); }
+.infoPage .mathValue{ font-size: clamp(22px, 3.4vw, 40px); }
+.infoPage .infoScoresRow .scoreNum{ font-weight:400; }
+
+
+/* ===== INFO-only tweaks ===== */
+.infoPage .mathLabel{
+  font-size: clamp(13px, 1.8vw, 18px);
+  letter-spacing: 0.10em;
+}
+.infoPage .tScoreWrap .scoreNum{
+  font-weight: 500; /* total score dunner op info */
+}
+
+
+/* Debug button (host) */
+
+.debugFab{
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.debugBtn{
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(10,10,10,.65);
+  color: rgba(255,255,255,.86);
+  padding: 10px 14px;
+  font-size: 12px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.debugBtn:hover{ background: rgba(20,20,20,.75); }
+.debugToast{
+  align-self: flex-end;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(0,0,0,.55);
+  color: rgba(255,255,255,.80);
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+/* (removed v46 variant override) */
+
+
+/* ===== v53A overrides ===== */
+/* Player scoreboard: prevent total score clipping during slide animation */
+#playView .tScoreWrap{ height:28px; }
+#playView .scoreNum{ line-height:28px; }
+#playView .scoreNum.out{ transform: translateY(14px); }
+#playView .scoreNum.in{ transform: translateY(-14px); }

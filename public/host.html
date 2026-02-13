@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Theater Balance Scale — Host</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body class="hostPage">
+  <div class="hostWrap">
+    <div class="hostHeader">
+      <div>
+        <div class="hostTitle">Theater Balance Scale — Host</div>
+        <div id="hostHint" class="hostHint">—</div>
+      </div>
+      <div class="hostBtns">
+        <button id="startBtn" class="btn primary">Start</button>
+        <button id="revealBtn" class="btn primary">Reveal</button>
+        <button id="nextBtn" class="btn primary">Next</button>
+        <button id="devFillBtn" class="btn">Dev Fill</button>
+        <button id="resetBtn" class="btn">Reset</button>
+      </div>
+    </div>
+
+    <div id="hostTiles" class="hostTiles"></div>
+
+    <div id="mathRow" class="mathRow hidden"></div>
+
+    <div id="hostRules" class="rulesHost"></div>
+  </div>
+
+
+  <div id="debugFab" class="debugFab">
+    <button id="debugCopyBtn" class="debugBtn">Kopieer debug</button>
+    <div id="debugToast" class="debugToast hidden">Gekopieerd</div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="host.js"></script>
+</body>
+</html>

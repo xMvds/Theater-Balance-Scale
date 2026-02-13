@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Theater Balance Scale</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="top">
+        <div>
+          <div class="title">Theater Balance Scale</div>
+          <div class="subtitle" id="meLabel">Niet ingelogd</div>
+        </div>
+      </div>
+
+      <div id="joinView" class="join">
+        <div class="joinBox">
+          <div class="joinHint">Vul je naam in om te joinen</div>
+          <input id="nameInput" class="input" placeholder="Jouw naam" maxlength="18"/>
+          <button id="joinBtn" class="btn primary">Join</button>
+        </div>
+      </div>
+
+      <div id="playView" class="hidden">
+        <div class="centerCol">
+
+          <div id="lobbyMsg" class="lobbyMsg hidden"></div>
+
+          <div id="panelGame" class="playerPanel hidden">
+            <div class="playerPanelTitle">Spel</div>
+
+            <div id="gridWrap" class="gridWrap">
+              <div id="grid" class="grid"></div>
+            </div>
+
+            <div id="confirmRow" class="confirmRow">
+              <button id="confirmBtn" class="btn primary confirm" disabled>Bevestigen</button>
+            </div>
+
+            <div id="rules" class="rules hidden"></div>
+
+            <!-- Scoreboard is inside the same panel so it becomes 1 continuous dark block (no gap). -->
+            <div id="panelScore" class="scorePanel scoreHidden" aria-hidden="true">
+              <div class="scoreInner">
+                <div id="scoreboard" class="board">
+                  <div id="tiles" class="tiles"></div>
+                </div>
+                <div id="playerMathRow" class="mathRow hidden"></div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="deadNoise" class="deadNoise"></div>
+
+  <div id="survivedFx" class="survivedFx hidden">
+    <div class="survivedText">YOU SURVIVED</div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="client.js"></script>
+</body>
+</html>
