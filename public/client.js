@@ -866,9 +866,9 @@ document.addEventListener("visibilitychange", () => {
 
   const STYLE = `
   #dbgPanel{
-    position:fixed; right:14px; bottom:14px;
+    position:fixed; right:10px; bottom:10px;
     z-index:9999;
-    width:min(320px, calc(100vw - 28px));
+    width:min(420px, calc(100vw - 20px));
     border-radius:18px;
     border:1px solid rgba(255,255,255,.18);
     background:rgba(0,0,0,.72);
@@ -894,7 +894,7 @@ document.addEventListener("visibilitychange", () => {
   }
   #dbgPanel .row{
     display:flex;
-    gap:8px;
+    gap:6px;
     flex-wrap:nowrap;
     justify-content:center;
     align-items:stretch;
@@ -902,9 +902,8 @@ document.addEventListener("visibilitychange", () => {
   #dbgPanel button{
     flex:1 1 0;
     min-width:0;
-    width: calc((100% - 16px) / 3);
-    height:38px;
-    padding: 0 8px;
+    height:44px;
+    padding: 0 6px;
     border-radius:12px;
     border:1px solid rgba(255,255,255,.18);
     background:rgba(255,255,255,.06);
@@ -916,6 +915,9 @@ document.addEventListener("visibilitychange", () => {
     cursor:pointer;
   }
   #dbgPanel button:active{ transform: translateY(1px); }
+  @media (max-width: 360px){
+    #dbgPanel button{ font-size:11px; }
+  }
   #dbgToast{
     position:fixed; left:14px; bottom:14px;
     z-index:9999;
