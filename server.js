@@ -307,8 +307,9 @@ function kickOne(socketId) {
 io.on("connection", (socket) => {
   socket.on("host_hello", () => {
     socket.data.isHost = true;
-    // Host refresh => kick everyone
-    kickAll();
+	    // Do NOT auto-kick players when the host opens/refreshes the host page.
+	    // This keeps the current lobby/game intact when the host comes in later.
+	    broadcastState();
   });
 
 
@@ -432,6 +433,7 @@ socket.on("join", ({ name, playerKey }) => {
   });
 
   socket.on("host_start", () => {
+    if (!socket.data.isHost) return;
     if (game.gameOver) return;
     if (game.phase === "collecting") return;
 
@@ -446,6 +448,7 @@ socket.on("join", ({ name, playerKey }) => {
   });
 
   socket.on("host_reveal", () => {
+    if (!socket.data.isHost) return;
     if (game.phase !== "collecting") return;
 
     endRoundAndScore();
@@ -466,6 +469,7 @@ socket.on("join", ({ name, playerKey }) => {
   });
 
   socket.on("host_next", () => {
+    if (!socket.data.isHost) return;
     if (game.gameOver) return;
     if (game.phase !== "revealed") return;
 
@@ -496,6 +500,7 @@ socket.on("join", ({ name, playerKey }) => {
   });
 
 socket.on("host_reset", () => {
+    if (!socket.data.isHost) return;
     for (const p of Object.values(game.players)) {
       if (!p) continue;
       p.score = 0;
@@ -517,6 +522,7 @@ socket.on("host_reset", () => {
   });
 
   socket.on("host_kick", (socketId) => {
+    if (!socket.data.isHost) return;
     kickOne(String(socketId || ""));
   });
 

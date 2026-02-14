@@ -1,4 +1,21 @@
 document.addEventListener("DOMContentLoaded", () => {
+  function requireAccessCode(){
+    try{
+      if (sessionStorage.getItem("tbs_access_ok") === "1") return true;
+    }catch(e){}
+    const code = prompt("Code nodig om host te openen:");
+    if (String(code || "").trim() === "0909"){
+      try{ sessionStorage.setItem("tbs_access_ok","1"); }catch(e){}
+      return true;
+    }
+    alert("Onjuiste code.");
+    location.replace("/");
+    return false;
+  }
+  if (!requireAccessCode()) return;
+
+  // Unlock host UI only after access code is accepted
+  document.body.classList.remove("hostLocked");
   const socket = io();
 
   const hostHint = document.getElementById("hostHint");
@@ -166,7 +183,6 @@ let resetArmed = false;
   const kickArmed = new Map();
   const kickTimers = new Map();
 
-  socket.emit("host_hello");
 
   function setHint(text) {
     if (hostHint) hostHint.textContent = text;
@@ -397,7 +413,16 @@ let resetArmed = false;
 
   
   function renderMath(state) {
-    // Always keep the math row mounted so the host UI never shifts.
+    // Keep the math row stable: it appears when the game starts (like the rules panel)
+    // and it never re-mounts per reveal, so the buttons don't jump.
+    if (!mathRow) return;
+    if (state.phase === "lobby" && state.round === 0) {
+      mathRow.classList.add("hidden");
+      mathRow.innerHTML = "";
+      return;
+    }
+    mathRow.classList.remove("hidden");
+
     // During collecting we show a "live" average/target based on submitted guesses so far.
     const live = (state.phase === "collecting") ? calcLiveMath(state) : null;
 
@@ -419,8 +444,6 @@ let resetArmed = false;
       target = null;
       dim = true;
     }
-
-    if (!mathRow) return;
 
     mathRow.classList.toggle("dim", dim);
     mathRow.innerHTML = `
@@ -526,6 +549,10 @@ let resetArmed = false;
     renderMath(state);
     renderRulesHost(state);
   });
+
+  // Ask the server for the latest state now that listeners are ready.
+  socket.emit("host_hello");
+
 
   socket.on("kicked", () => {});
 });

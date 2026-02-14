@@ -1,3 +1,17 @@
+(function requireAccessCode(){
+  try{
+    if (sessionStorage.getItem("tbs_access_ok") === "1") return;
+  }catch(e){}
+  const code = prompt("Code nodig om info te openen:");
+  if (String(code || "").trim() === "0909"){
+    try{ sessionStorage.setItem("tbs_access_ok","1"); }catch(e){}
+    return;
+  }
+  alert("Onjuiste code.");
+  location.replace("/");
+  throw new Error("Access denied");
+})();
+
 const socket = io();
 
 const blackout = document.getElementById("infoBlackout");

@@ -41,6 +41,15 @@ function setViews(joined){
   } else {
     joinView.classList.remove("hidden");
     playView.classList.add("hidden");
+
+    // UX: when the login/join view is visible, focus the name input automatically
+    // so the player can start typing immediately (desktop).
+    requestAnimationFrame(() => {
+      try {
+        nameInput.focus();
+        nameInput.select();
+      } catch {}
+    });
   }
 }
 
@@ -848,31 +857,14 @@ document.addEventListener("visibilitychange", () => {
 
 /* ===========================
    Hidden Debug UI (player)
-   Press "d" 3x quickly to show a small Debug button for 5 seconds.
-   Clicking it reveals debug tools.
+   Press "d" 3x quickly to show the debug menu for 5 seconds.
+   (Auto-hides; timer resets on interaction.)
    =========================== */
 (function setupHiddenDebugUI(){
+  if (window.__tbsHiddenDebugUI) return;
+  window.__tbsHiddenDebugUI = true;
+
   const STYLE = `
-  #dbgTeaserBtn{
-    position:fixed; right:14px; bottom:14px;
-    z-index:9999;
-    padding:10px 12px;
-    border-radius:14px;
-    border:1px solid rgba(255,255,255,.22);
-    background:rgba(0,0,0,.55);
-    color:#fff;
-    font:600 14px/1 system-ui, -apple-system, Segoe UI, Roboto, Arial;
-    cursor:pointer;
-    opacity:0;
-    transform:translateY(6px);
-    transition:opacity .18s ease, transform .18s ease;
-    pointer-events:none;
-  }
-  #dbgTeaserBtn.show{
-    opacity:1;
-    transform:translateY(0);
-    pointer-events:auto;
-  }
   #dbgPanel{
     position:fixed; right:14px; bottom:14px;
     z-index:9999;
@@ -902,42 +894,39 @@ document.addEventListener("visibilitychange", () => {
   }
   #dbgPanel .row{
     display:flex;
-    gap:10px;
-    flex-wrap:wrap;
+    gap:8px;
+    flex-wrap:nowrap;
+    justify-content:center;
+    align-items:stretch;
   }
   #dbgPanel button{
-    flex:1 1 140px;
-    padding:10px 12px;
-    border-radius:14px;
+    flex:1 1 0;
+    min-width:0;
+    width: calc((100% - 16px) / 3);
+    height:38px;
+    padding: 0 8px;
+    border-radius:12px;
     border:1px solid rgba(255,255,255,.18);
-    background:rgba(255,255,255,.08);
+    background:rgba(255,255,255,.06);
     color:#fff;
-    font:600 13px/1 system-ui, -apple-system, Segoe UI, Roboto, Arial;
+    font:600 12px/1 system-ui, -apple-system, Segoe UI, Roboto, Arial;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
     cursor:pointer;
   }
-  #dbgPanel button:hover{ background:rgba(255,255,255,.12); }
-  #dbgPanel .secondary{ flex:1 1 100%; background:rgba(255,255,255,.06); }
-  #dbgPanel .close{
-    position:absolute; top:10px; right:10px;
-    width:30px; height:30px;
-    border-radius:12px;
-    padding:0;
-    display:grid;
-    place-items:center;
-    background:rgba(255,255,255,.06);
-  }
+  #dbgPanel button:active{ transform: translateY(1px); }
   #dbgToast{
-    position:fixed; left:50%; bottom:18px;
-    transform:translateX(-50%);
+    position:fixed; left:14px; bottom:14px;
     z-index:9999;
     padding:10px 12px;
     border-radius:14px;
     border:1px solid rgba(255,255,255,.16);
-    background:rgba(0,0,0,.75);
+    background:rgba(0,0,0,.72);
     color:#fff;
     font:600 13px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial;
     opacity:0;
-    transition: opacity .18s ease;
+    transition:opacity .18s ease;
     pointer-events:none;
     max-width:min(520px, calc(100vw - 28px));
     text-align:center;
@@ -948,23 +937,14 @@ document.addEventListener("visibilitychange", () => {
   st.textContent = STYLE;
   document.head.appendChild(st);
 
-  const teaserBtn = document.createElement("button");
-  teaserBtn.id = "dbgTeaserBtn";
-  teaserBtn.type = "button";
-  teaserBtn.textContent = "Debug";
-  document.body.appendChild(teaserBtn);
-
   const panel = document.createElement("div");
   panel.id = "dbgPanel";
   panel.innerHTML = `
-    <button class="close" id="dbgClose" title="Sluiten">✕</button>
     <h4>Debug tools</h4>
     <div class="row">
-      <button id="dbgDevFill" type="button">Dev fill</button>
       <button id="dbgCopy" type="button">Kopieer debug</button>
       <button id="dbgHost" type="button">Open host</button>
       <button id="dbgInfo" type="button">Open info</button>
-      <button id="dbgHide" type="button" class="secondary">Verberg</button>
     </div>
   `;
   document.body.appendChild(panel);
@@ -1013,34 +993,37 @@ document.addEventListener("visibilitychange", () => {
     };
   }
 
-  function showTeaser(){
-    teaserBtn.classList.add("show");
-    clearTimeout(showTeaser._t);
-    showTeaser._t = setTimeout(() => teaserBtn.classList.remove("show"), 5000);
-  }
-
-  function showPanel(){
-    teaserBtn.classList.remove("show");
-    panel.classList.add("show");
-  }
+  let autoHideTimer = null;
   function hidePanel(){
     panel.classList.remove("show");
+    clearTimeout(autoHideTimer);
+    autoHideTimer = null;
+  }
+  function armAutoHide(){
+    clearTimeout(autoHideTimer);
+    autoHideTimer = setTimeout(hidePanel, 5000);
+  }
+  function showPanel(){
+    panel.classList.add("show");
+    armAutoHide();
   }
 
-  teaserBtn.addEventListener("click", showPanel);
-  panel.querySelector("#dbgHide").addEventListener("click", hidePanel);
-  panel.querySelector("#dbgClose").addEventListener("click", hidePanel);
+  panel.addEventListener("pointerdown", armAutoHide);
 
-  panel.querySelector("#dbgDevFill").addEventListener("click", () => {
-    socket.emit("debug_devfill");
-  });
   panel.querySelector("#dbgCopy").addEventListener("click", () => {
+    armAutoHide();
     copyText(JSON.stringify(buildDebugDump(), null, 2));
   });
-  panel.querySelector("#dbgHost").addEventListener("click", () => window.open("/host", "_blank"));
-  panel.querySelector("#dbgInfo").addEventListener("click", () => window.open("/info", "_blank"));
+  panel.querySelector("#dbgHost").addEventListener("click", () => {
+    armAutoHide();
+    window.open("/host", "_blank");
+  });
+  panel.querySelector("#dbgInfo").addEventListener("click", () => {
+    armAutoHide();
+    window.open("/info", "_blank");
+  });
 
-  // Listen to server notices (e.g. dev fill disabled)
+  // Listen to server notices (if any)
   socket.on("debug_notice", (msg) => showToast(msg));
 
   // Triple 'd' detection
@@ -1056,7 +1039,7 @@ document.addEventListener("visibilitychange", () => {
     dHits.push(now);
     if (dHits.length >= 3) {
       dHits = [];
-      showTeaser();
+      showPanel();
     }
   });
-})();
+})(); 

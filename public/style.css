@@ -13,7 +13,13 @@
 html,body{height:100%}
 /* Reserve the vertical scrollbar to prevent a visible layout "knip" when
    the scoreboard panel changes page height. */
-html{ overflow-y: scroll; background: var(--bg); }
+html{
+  overflow-y: scroll;
+  background: var(--bg);
+  /* Prevent mobile Safari from auto-scaling text (can cause subtle clipping at some zoom levels). */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
 body{
   margin:0;
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
@@ -255,9 +261,11 @@ body.noAnim .scoreNum{
 }
 
 .scorePanel .tile{
-  /* Slightly smaller tiles (keep text sizes the same) */
+  /* Player scoreboard tiles: give a little extra vertical breathing room.
+     Fixed heights can cause occasional clipping on some font/zoom combos (notably iOS). */
   width:190px;
-  height:140px;
+  min-height:148px;
+  height:auto;
   padding:14px 16px;
   border:1px solid rgba(255,255,255,0.12);
   background:rgba(0,0,0,0.34);
@@ -505,8 +513,11 @@ body.noAnim .scoreNum{
 }
 .tScoreWrap{
   position:relative;
-  /* Slightly taller so negative scores never get clipped on some fonts/zoom levels */
-  height:22px;
+  /* Use an em-based height + a px minimum so it scales with text-size/zoom.
+     This avoids rare clipping of -9 / -10 etc on some devices. */
+  height:1.9em;
+  min-height:26px;
+  padding:2px 0;
   overflow:hidden;
   display:flex;
   align-items:center;
@@ -515,13 +526,19 @@ body.noAnim .scoreNum{
 .scoreNum{
   position:absolute;
   left:0; right:0;
+  top:0; bottom:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
   text-align:center;
   font-weight:700;
   letter-spacing:0.06em;
   font-size:12px;
-  line-height:22px;
+  line-height:1.0;
+  padding:1px 0;
   opacity:0.85;
   transition: transform 900ms ease, opacity 1100ms ease;
+  will-change: transform;
 }
 
 /* Player scoreboard total score thinner */
@@ -694,6 +711,13 @@ body.survivedTheme{
 
 /* ===== Host page ===== */
 .hostPage .wrap{ display:none; }
+
+/* Host access lock: keep host screen empty (background only) until code is entered */
+.hostPage.hostLocked .hostWrap,
+.hostPage.hostLocked #debugFab{
+  display:none !important;
+}
+
 .hostWrap{
   max-width: 1040px;
   margin: 0 auto;
@@ -1013,7 +1037,7 @@ body.survivedTheme{
   font-size:84px;
   transition: text-shadow 1400ms ease;
   font-weight:700;
-  line-height:1;
+  line-height:1.15;
   color: rgba(255,255,255,.92);
 }
 
@@ -1250,7 +1274,25 @@ body.survivedTheme{
 
 /* ===== v53A overrides ===== */
 /* Player scoreboard: prevent total score clipping during slide animation */
-#playView .tScoreWrap{ height:28px; }
-#playView .scoreNum{ line-height:28px; }
-#playView .scoreNum.out{ transform: translateY(14px); }
-#playView .scoreNum.in{ transform: translateY(-14px); }
+/* The total score line was still getting clipped on some zoom/font combos.
+   For player tiles we switch to a fade-only total score animation and
+   vertically center using flex (no font-metric surprises). */
+#playView .tScoreWrap{
+  /* Keep it fade-only, but make the wrapper scale with any text sizing/zoom.
+     This is the most reliable way to avoid rare clipping of -9 / -10 etc. */
+  height: 2.4em;
+  min-height: 36px;
+  padding: 3px 0;
+  overflow:hidden;
+}
+#playView .scoreNum{
+  top:0;
+  bottom:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  line-height:1.15;
+}
+#playView .scoreNum.live{ transform:none; }
+#playView .scoreNum.out{ transform:none; }
+#playView .scoreNum.in{ transform:none; }
