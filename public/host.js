@@ -221,6 +221,32 @@ let resetArmed = false;
     return (Math.round(n * 100) / 100).toFixed(2);
   }
 
+  // Compute a "live" average/target during collecting, based on submitted guesses so far.
+  function calcLiveMath(state) {
+    try {
+      const vals = (state.players || [])
+        .filter((p) => p && !p.eliminated && p.submitted && typeof p.lastGuess === "number")
+        .map((p) => ({ id: p.id, v: p.lastGuess }));
+
+      if (!vals.length) return null;
+
+      const avg = vals.reduce((s, o) => s + o.v, 0) / vals.length;
+      const target = avg * 0.8;
+
+      let best = Infinity;
+      let winners = [];
+      for (const o of vals) {
+        const d = Math.abs(o.v - target);
+        if (d < best - 1e-9) { best = d; winners = [o.id]; }
+        else if (Math.abs(d - best) <= 1e-9) { winners.push(o.id); }
+      }
+      return { average: avg, target, winnerIds: winners };
+    } catch {
+      return null;
+    }
+  }
+
+
   function animateScore(el, from, to, isBad) {
     if (!el) return;
     if (Number(el.dataset.current ?? NaN) === to) return;
@@ -305,9 +331,13 @@ let resetArmed = false;
 
   function renderHostPlayers(state) {
     const list = state.players.slice().sort((a, b) => a.name.localeCompare(b.name));
-    const winnerIds = (state.lastRound?.winnerIds && state.lastRound.winnerIds.length)
-      ? state.lastRound.winnerIds
-      : (state.lastRound?.winnerId ? [state.lastRound.winnerId] : []);
+        const liveMath = (state.phase === "collecting") ? calcLiveMath(state) : null;
+    const winnerIds = (state.phase === "collecting" && liveMath)
+      ? (liveMath.winnerIds || [])
+      : ((state.lastRound?.winnerIds && state.lastRound.winnerIds.length)
+        ? state.lastRound.winnerIds
+        : (state.lastRound?.winnerId ? [state.lastRound.winnerId] : []));
+    const winnerIdsFinal = (state.phase === "revealed" || state.phase === "collecting") ? winnerIds : [];
 
     const liveIds = new Set(list.map((p) => p.id));
     for (const [id, el] of tileById.entries()) {
@@ -338,7 +368,7 @@ let resetArmed = false;
 
       tile.classList.toggle("dead", !!p.eliminated);
       tile.classList.toggle("glow", !!glow);
-      tile.classList.toggle("winner", winnerIds.includes(p.id));
+      tile.classList.toggle("winner", winnerIdsFinal.includes(p.id));
 
       const delta = Number(p.lastDelta ?? 0);
       const prev = prevScores.has(p.id) ? prevScores.get(p.id) : (p.score - delta);
@@ -365,32 +395,45 @@ let resetArmed = false;
     for (const p of list) hostTiles?.appendChild(tileById.get(p.id));
   }
 
+  
   function renderMath(state) {
-    if (
-      state.phase !== "revealed" ||
-      !state.lastRound
-    ) {
-      mathRow?.classList.add("hidden");
-      mathRow?.classList.remove("show");
-      if (mathRow) mathRow.innerHTML = "";
-      return;
+    // Always keep the math row mounted so the host UI never shifts.
+    // During collecting we show a "live" average/target based on submitted guesses so far.
+    const live = (state.phase === "collecting") ? calcLiveMath(state) : null;
+
+    let avg = null;
+    let target = null;
+    let dim = true;
+
+    if (state.phase === "revealed" && state.lastRound) {
+      avg = state.lastRound.average;
+      target = state.lastRound.target;
+      dim = false;
+    } else if (state.phase === "collecting" && live) {
+      avg = live.average;
+      target = live.target;
+      dim = false; // show as real numbers (still not the final reveal)
+    } else {
+      // Lobby / no submissions yet: keep placeholders but keep the row visible.
+      avg = null;
+      target = null;
+      dim = true;
     }
 
-    mathRow?.classList.remove("hidden");
-    if (mathRow) {
-      mathRow.innerHTML = `
-        <div class="mathBox">
-          <div class="mathLabel">Gemiddelde</div>
-          <div class="mathValue">${fmt2(state.lastRound.average)}</div>
-        </div>
-        <div class="mathOp">× 0.8 =</div>
-        <div class="mathBox">
-          <div class="mathLabel">Target</div>
-          <div class="mathValue">${fmt2(state.lastRound.target)}</div>
-        </div>
-      `;
-      requestAnimationFrame(() => mathRow.classList.add("show"));
-    }
+    if (!mathRow) return;
+
+    mathRow.classList.toggle("dim", dim);
+    mathRow.innerHTML = `
+      <div class="mathBox">
+        <div class="mathLabel">Gemiddelde</div>
+        <div class="mathValue">${fmt2(avg)}</div>
+      </div>
+      <div class="mathOp">× 0.8 =</div>
+      <div class="mathBox">
+        <div class="mathLabel">Target</div>
+        <div class="mathValue">${fmt2(target)}</div>
+      </div>
+    `;
   }
 
   function schedulePulseStop(key) {
@@ -475,6 +518,9 @@ let resetArmed = false;
     revealBtn.disabled = isGameOver || !(state.phase === "collecting");
     nextBtn.disabled = isGameOver || !(state.phase === "revealed");
     devFillBtn.disabled = isGameOver || !(state.phase === "collecting");
+
+    // Make reset the obvious action when the game has ended.
+    resetBtn?.classList.toggle("resetPulse", isGameOver);
 
     renderHostPlayers(state);
     renderMath(state);

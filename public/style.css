@@ -648,9 +648,29 @@ body.survivedTheme{
   position:fixed;
   inset:0;
   /* Blur everything behind (but NOT the survived text/glow). */
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
-  background: rgba(0,0,0,0.10);
+  /* Softer blur (requested) */
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  background: rgba(0,0,0,0.06);
+}
+
+/* Host: when the game is over, pulse the Reset button so it's obvious what to do. */
+.hostPage #resetBtn.resetPulse{
+  animation: resetPulseGlow 1.15s ease-in-out infinite;
+}
+@keyframes resetPulseGlow{
+  0%,100%{
+    opacity: 0.86;
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,0.10),
+      0 0 0 rgba(255,255,255,0.0);
+  }
+  50%{
+    opacity: 1;
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,0.22),
+      0 0 26px rgba(255,255,255,0.18);
+  }
 }
 .survivedText{
   position: relative;
@@ -710,6 +730,18 @@ body.survivedTheme{
   flex-wrap:wrap;
 }
 .hostWrap .mathRow{ width:100%; justify-content:center; }
+
+/* Host: keep the math row mounted so the header/buttons never jump when average/target updates. */
+.hostPage #mathRow{
+  opacity: 1;
+  transform: none;
+  transition: none;
+  min-height: 74px;
+}
+.hostPage #mathRow.dim{
+  opacity: 0.70;
+}
+
 
 .hostTile .tHeadRow{
   display:flex;

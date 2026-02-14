@@ -10,6 +10,21 @@ const io = new Server(server);
 
 app.use(express.static(path.join(__dirname, "public")));
 
+// Friendly routes (optional, but handy on Render)
+app.get("/", (_req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+app.get("/player", (_req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+app.get("/host", (_req, res) => {
+  res.sendFile(path.join(__dirname, "public", "host.html"));
+});
+app.get("/info", (_req, res) => {
+  res.sendFile(path.join(__dirname, "public", "info.html"));
+});
+
+
 const game = {
   phase: "lobby", // lobby | collecting | revealed
   round: 0,
@@ -32,6 +47,9 @@ const game = {
 // auto-unlock the player scoreboard after the expected animation duration.
 const INFO_ANIM_TOTAL_MS = 11000; // ms
 let revealReadyTimer = null;
+
+// Allow dev fill from player debug UI only when explicitly enabled.
+const DEBUG_DEVFILL = process.env.DEBUG_DEVFILL === "1";
 
 function markRevealReady(round) {
   if (game.revealReadyRound === round) return;
@@ -321,6 +339,25 @@ socket.on("host_devfill", () => {
   broadcastState();
 });
 
+socket.on("debug_devfill", () => {
+  if (!DEBUG_DEVFILL && !socket.data.isHost) {
+    socket.emit("debug_notice", "Dev fill is uitgeschakeld. Zet DEBUG_DEVFILL=1 op de server om dit toe te staan.");
+    return;
+  }
+  if (game.phase !== "collecting") return;
+
+  for (const sid of Object.keys(game.players)) {
+    const p = game.players[sid];
+    if (!p || p.eliminated) continue;
+    if (p.submitted) continue;
+    const n = Math.floor(Math.random() * 101);
+    p.lastGuess = n;
+    p.submitted = true;
+  }
+  broadcastState();
+});
+
+
 socket.on("join", ({ name, playerKey }) => {
     const rawName = sanitizeName(name);
     const key = String(playerKey || "").trim();
@@ -446,6 +483,7 @@ socket.on("join", ({ name, playerKey }) => {
 
   // Dev tool: auto-fill random guesses for all alive players (for fast testing)
   socket.on("host_dev_fill", () => {
+    if (!socket.data.isHost) return;
     if (game.phase !== "collecting") return;
 
     for (const p of Object.values(game.players)) {

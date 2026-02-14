@@ -845,3 +845,218 @@ document.addEventListener("visibilitychange", () => {
 });
 
 
+
+/* ===========================
+   Hidden Debug UI (player)
+   Press "d" 3x quickly to show a small Debug button for 5 seconds.
+   Clicking it reveals debug tools.
+   =========================== */
+(function setupHiddenDebugUI(){
+  const STYLE = `
+  #dbgTeaserBtn{
+    position:fixed; right:14px; bottom:14px;
+    z-index:9999;
+    padding:10px 12px;
+    border-radius:14px;
+    border:1px solid rgba(255,255,255,.22);
+    background:rgba(0,0,0,.55);
+    color:#fff;
+    font:600 14px/1 system-ui, -apple-system, Segoe UI, Roboto, Arial;
+    cursor:pointer;
+    opacity:0;
+    transform:translateY(6px);
+    transition:opacity .18s ease, transform .18s ease;
+    pointer-events:none;
+  }
+  #dbgTeaserBtn.show{
+    opacity:1;
+    transform:translateY(0);
+    pointer-events:auto;
+  }
+  #dbgPanel{
+    position:fixed; right:14px; bottom:14px;
+    z-index:9999;
+    width:min(320px, calc(100vw - 28px));
+    border-radius:18px;
+    border:1px solid rgba(255,255,255,.18);
+    background:rgba(0,0,0,.72);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    padding:12px;
+    box-shadow: 0 18px 40px rgba(0,0,0,.45);
+    opacity:0;
+    transform:translateY(10px);
+    transition:opacity .18s ease, transform .18s ease;
+    pointer-events:none;
+  }
+  #dbgPanel.show{
+    opacity:1;
+    transform:translateY(0);
+    pointer-events:auto;
+  }
+  #dbgPanel h4{
+    margin:0 0 10px 0;
+    font:700 14px/1.1 system-ui, -apple-system, Segoe UI, Roboto, Arial;
+    color:#fff;
+    letter-spacing:.2px;
+  }
+  #dbgPanel .row{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+  #dbgPanel button{
+    flex:1 1 140px;
+    padding:10px 12px;
+    border-radius:14px;
+    border:1px solid rgba(255,255,255,.18);
+    background:rgba(255,255,255,.08);
+    color:#fff;
+    font:600 13px/1 system-ui, -apple-system, Segoe UI, Roboto, Arial;
+    cursor:pointer;
+  }
+  #dbgPanel button:hover{ background:rgba(255,255,255,.12); }
+  #dbgPanel .secondary{ flex:1 1 100%; background:rgba(255,255,255,.06); }
+  #dbgPanel .close{
+    position:absolute; top:10px; right:10px;
+    width:30px; height:30px;
+    border-radius:12px;
+    padding:0;
+    display:grid;
+    place-items:center;
+    background:rgba(255,255,255,.06);
+  }
+  #dbgToast{
+    position:fixed; left:50%; bottom:18px;
+    transform:translateX(-50%);
+    z-index:9999;
+    padding:10px 12px;
+    border-radius:14px;
+    border:1px solid rgba(255,255,255,.16);
+    background:rgba(0,0,0,.75);
+    color:#fff;
+    font:600 13px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial;
+    opacity:0;
+    transition: opacity .18s ease;
+    pointer-events:none;
+    max-width:min(520px, calc(100vw - 28px));
+    text-align:center;
+  }
+  #dbgToast.show{ opacity:1; }
+  `;
+  const st = document.createElement("style");
+  st.textContent = STYLE;
+  document.head.appendChild(st);
+
+  const teaserBtn = document.createElement("button");
+  teaserBtn.id = "dbgTeaserBtn";
+  teaserBtn.type = "button";
+  teaserBtn.textContent = "Debug";
+  document.body.appendChild(teaserBtn);
+
+  const panel = document.createElement("div");
+  panel.id = "dbgPanel";
+  panel.innerHTML = `
+    <button class="close" id="dbgClose" title="Sluiten">✕</button>
+    <h4>Debug tools</h4>
+    <div class="row">
+      <button id="dbgDevFill" type="button">Dev fill</button>
+      <button id="dbgCopy" type="button">Kopieer debug</button>
+      <button id="dbgHost" type="button">Open host</button>
+      <button id="dbgInfo" type="button">Open info</button>
+      <button id="dbgHide" type="button" class="secondary">Verberg</button>
+    </div>
+  `;
+  document.body.appendChild(panel);
+
+  const toast = document.createElement("div");
+  toast.id = "dbgToast";
+  document.body.appendChild(toast);
+
+  function showToast(msg){
+    toast.textContent = String(msg || "");
+    toast.classList.add("show");
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(() => toast.classList.remove("show"), 2600);
+  }
+
+  function copyText(text){
+    const t = String(text ?? "");
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(t).then(() => showToast("Debug gekopieerd.")).catch(() => fallback());
+      return;
+    }
+    fallback();
+
+    function fallback(){
+      const ta = document.createElement("textarea");
+      ta.value = t;
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); showToast("Debug gekopieerd."); }
+      catch { showToast("Kopiëren mislukt."); }
+      finally { ta.remove(); }
+    }
+  }
+
+  function buildDebugDump(){
+    let key = "";
+    try { key = getPlayerKey(); } catch {}
+    return {
+      ts: new Date().toISOString(),
+      url: location.href,
+      hidden: document.hidden,
+      playerKey: key,
+      lastState,
+    };
+  }
+
+  function showTeaser(){
+    teaserBtn.classList.add("show");
+    clearTimeout(showTeaser._t);
+    showTeaser._t = setTimeout(() => teaserBtn.classList.remove("show"), 5000);
+  }
+
+  function showPanel(){
+    teaserBtn.classList.remove("show");
+    panel.classList.add("show");
+  }
+  function hidePanel(){
+    panel.classList.remove("show");
+  }
+
+  teaserBtn.addEventListener("click", showPanel);
+  panel.querySelector("#dbgHide").addEventListener("click", hidePanel);
+  panel.querySelector("#dbgClose").addEventListener("click", hidePanel);
+
+  panel.querySelector("#dbgDevFill").addEventListener("click", () => {
+    socket.emit("debug_devfill");
+  });
+  panel.querySelector("#dbgCopy").addEventListener("click", () => {
+    copyText(JSON.stringify(buildDebugDump(), null, 2));
+  });
+  panel.querySelector("#dbgHost").addEventListener("click", () => window.open("/host", "_blank"));
+  panel.querySelector("#dbgInfo").addEventListener("click", () => window.open("/info", "_blank"));
+
+  // Listen to server notices (e.g. dev fill disabled)
+  socket.on("debug_notice", (msg) => showToast(msg));
+
+  // Triple 'd' detection
+  let dHits = [];
+  document.addEventListener("keydown", (e) => {
+    if (e.repeat) return;
+    const tag = (document.activeElement && document.activeElement.tagName || "").toLowerCase();
+    if (tag === "input" || tag === "textarea") return;
+
+    if (String(e.key || "").toLowerCase() !== "d") return;
+    const now = Date.now();
+    dHits = dHits.filter((t) => now - t < 1200);
+    dHits.push(now);
+    if (dHits.length >= 3) {
+      dHits = [];
+      showTeaser();
+    }
+  });
+})();
