@@ -1044,4 +1044,40 @@ document.addEventListener("visibilitychange", () => {
       showPanel();
     }
   });
+
+  // Touch / pointer shortcut: triple tap or long-press on the header title (works on touchscreens)
+  const dbgTarget = document.querySelector(".title");
+  if (dbgTarget) {
+    let tapHits = [];
+    dbgTarget.addEventListener("pointerup", (e) => {
+      // Only treat touch/pen as taps (mouse clicks shouldn't accidentally open debug)
+      if (e && e.pointerType && e.pointerType === "mouse") return;
+      const now = Date.now();
+      tapHits = tapHits.filter((t) => now - t < 900);
+      tapHits.push(now);
+      if (tapHits.length >= 3) {
+        tapHits = [];
+        showPanel();
+      }
+    });
+
+    let holdTimer = null;
+    const clearHold = () => { if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; } };
+    dbgTarget.addEventListener("pointerdown", (e) => {
+      if (e && e.pointerType && e.pointerType === "mouse") return;
+      clearHold();
+      holdTimer = setTimeout(() => {
+        holdTimer = null;
+        showPanel();
+      }, 700);
+    });
+    dbgTarget.addEventListener("pointercancel", clearHold);
+    dbgTarget.addEventListener("pointerup", clearHold);
+    dbgTarget.addEventListener("pointermove", (e) => {
+      // Small moves happen during taps; cancel only on bigger drags
+      if (!holdTimer) return;
+      if (e && (Math.abs(e.movementX) > 4 || Math.abs(e.movementY) > 4)) clearHold();
+    });
+  }
+
 })(); 

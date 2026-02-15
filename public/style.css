@@ -53,6 +53,57 @@ body::after{
   z-index: -1;
   background: linear-gradient(to bottom, rgba(11,13,18,0) 0%, rgba(11,13,18,0) 72%, rgba(11,13,18,0.65) 100%);
 }
+
+/* === Player background FX variants (Chrome-friendly) === */
+
+/* Player-only: body without host/info classes
+   Goals: no visible banding without ugly noise, and smooth animation on Chrome (composited). */
+body:not(.hostPage):not(.infoPage)::before{
+  content:"";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -2;
+
+  /* Baked + lightly dithered background to prevent gradient banding */
+  background: url("bg_player_dither.png") center/cover no-repeat;
+
+  /* Oversize slightly so no hard edges ever appear */
+  transform: translate3d(0,0,0) scale(1.08);
+  transform-origin: 50% 50%;
+  backface-visibility: hidden;
+  will-change: transform;
+}
+
+body:not(.hostPage):not(.infoPage)::after{
+  content:"";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+
+  /* A few soft glows on top (cheap) + vignette */
+  background:
+    radial-gradient(1100px 900px at 16% 28%, rgba(200,225,255,0.11) 0%, rgba(0,0,0,0) 72%),
+    radial-gradient(1200px 950px at 84% 22%, rgba(200,225,255,0.11) 0%, rgba(0,0,0,0) 74%),
+    radial-gradient(1400px 1050px at 50% 92%, rgba(200,225,255,0.08) 0%, rgba(0,0,0,0) 78%),
+    radial-gradient(120% 100% at 50% 30%, rgba(11,13,18,0.00) 0%, rgba(11,13,18,0.00) 55%, rgba(11,13,18,0.58) 100%),
+    linear-gradient(to bottom, rgba(11,13,18,0) 0%, rgba(11,13,18,0) 72%, rgba(11,13,18,0.70) 100%);
+
+  opacity: 0.56;
+  transform: translate3d(0,0,0);
+  transform-origin: 50% 50%;
+  backface-visibility: hidden;
+  will-change: opacity, transform;
+  animation: playerBgPulse 10s ease-in-out infinite;
+}
+
+@keyframes playerBgPulse {
+  0%,100%{ opacity:0.48; transform: translate3d(0,0,0) scale(1.00); }
+  50%{ opacity:0.60; transform: translate3d(0,0,0) scale(1.018); }
+}
+
+/* END Player background FX variants */
 .hidden{display:none !important}
 
 /* When a tab is in the background, browsers throttle animations/timers.
@@ -68,6 +119,8 @@ body.noAnim .scoreNum{
   transition: none !important;
   animation: none !important;
 }
+
+body.noAnim:not(.hostPage):not(.infoPage)::after{ animation: none !important; }
 
 .wrap{
   min-height:100%;
