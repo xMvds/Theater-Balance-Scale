@@ -7,6 +7,9 @@
   <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
+  <!-- Player background (FinisherHeader particles) -->
+  <div id="playerBgC" class="playerBgC finisher-header" aria-hidden="true"></div>
+
   <div class="wrap">
     <div class="card">
       <div class="top">
@@ -64,7 +67,40 @@
     <div class="survivedText">YOU SURVIVED</div>
   </div>
 
+  <!-- Optional: Player-side "Info" reveal animation (used when playing without the info screen) -->
+  <div id="playerRevealOverlay" class="playerRevealOverlay hidden" aria-hidden="true">
+    <div id="playerRevealBlackout" class="playerRevealBlackout"></div>
+
+    <!-- Round rule intro (shown when host enables player reveal mode) -->
+    <div id="playerRevealRoundRules" class="infoRoundRules hidden"></div>
+
+    <div id="playerRevealStage" class="playerRevealStage">
+      <div class="infoFrame">
+        <!-- Keep this scene markup identical to /info.html so the animation matches exactly -->
+        <div id="infoScene" class="infoScene">
+          <div id="infoNamesRow" class="infoNamesRow"></div>
+          <div id="infoGuessesRow" class="infoGuessesRow"></div>
+          <div id="infoScoresRow" class="infoScoresRow"></div>
+          <div id="infoDeltasRow" class="infoDeltasRow"></div>
+
+          <div id="infoMathRow" class="infoMathRow">
+            <div id="infoAvgBox" class="mathBox bigMath">
+              <div class="mathLabel">Gemiddelde</div>
+              <div class="mathValue" id="infoAvgVal">—</div>
+            </div>
+            <div id="infoMathOp" class="mathOp bigMathOp">× 0.8 =</div>
+            <div id="infoTargetBox" class="mathBox bigMath">
+              <div class="mathLabel">Target</div>
+              <div class="mathValue" id="infoTargetVal">—</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="/socket.io/socket.io.js"></script>
+  <script src="finisher-header.es5.min.js" type="text/javascript"></script>
   <script src="client.js"></script>
 </body>
 </html>

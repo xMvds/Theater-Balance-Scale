@@ -7,6 +7,115 @@ function escapeHtml(str){
 
 const socket = io();
 
+// Player background: A/B/C/D test controlled from the host (HOST buttons switch PLAYER bg)
+const IS_PLAYER_PAGE = !document.body.classList.contains("hostPage") && !document.body.classList.contains("infoPage");
+const playerBgBEl = document.getElementById("playerBgB");
+const playerBgCEl = document.getElementById("playerBgC");
+
+let currentPlayerBgMode = "A";
+let finisherInstance = null;
+let finisherModeKey = null;
+let finisherConfigSig = null;
+
+// Optional server-provided configs for FinisherHeader (modes C/D)
+let finisherCfgCFromServer = null;
+let finisherCfgDFromServer = null;
+
+function destroyFinisher(){
+  if (!finisherInstance) { finisherModeKey = null; finisherConfigSig = null; return; }
+  try{ if (typeof finisherInstance.destroy === "function") finisherInstance.destroy(); }catch(e){}
+  finisherInstance = null;
+  finisherModeKey = null;
+  finisherConfigSig = null;
+  try{ if (playerBgCEl) playerBgCEl.innerHTML = ""; }catch(e){}
+  try{ if (playerBgCEl) playerBgCEl.style.transform = ""; }catch(e){}
+}
+
+function ensureFinisher(modeKey){
+  if (!playerBgCEl) return;
+  const key = (modeKey === "D") ? "D" : "C";
+
+  if (typeof window.FinisherHeader !== "function") {
+    console.warn("FinisherHeader library not loaded (finisher-header.es5.min.js).");
+    return;
+  }
+
+  // Config defaults (used if server didn't send overrides)
+  const cfgCDefault = {
+    "count": 6,
+    "size": { "min": 207, "max": 304, "pulse": 0.5 },
+    "speed": { "x": { "min": 0, "max": 0.1 }, "y": { "min": 0, "max": 0.2 } },
+    "colors": { "background": "#0b0d12", "particles": ["#3b3c46"] },
+    "blending": "lighten",
+    "opacity": { "center": 0.05, "edge": 0 },
+    "skew": 0,
+    "shapes": ["c"]
+  };
+
+  const cfgDDefault = {
+    "count": 6,
+    "size": { "min": 207, "max": 304, "pulse": 0.5 },
+    "speed": { "x": { "min": 0, "max": 0.1 }, "y": { "min": 0, "max": 0.2 } },
+    "colors": { "background": "#0b0d12", "particles": ["#3b3c46"] },
+    "blending": "lighten",
+    "opacity": { "center": 0.1, "edge": 0 },
+    "skew": 0,
+    "shapes": ["c"]
+  };
+
+  const cfg = (key === "D")
+    ? (finisherCfgDFromServer || cfgDDefault)
+    : (finisherCfgCFromServer || cfgCDefault);
+
+  // If we're already running with the requested config, keep it.
+  // (But if the config changed, we restart.)
+  const sig = key + "|" + JSON.stringify(cfg || {});
+  if (finisherInstance && finisherModeKey === key && finisherConfigSig === sig) return;
+
+  // Otherwise, restart with the new config.
+  destroyFinisher();
+  finisherConfigSig = sig;
+
+  // Match the visible element background to the config background (avoids flashes while canvas starts).
+  try{ playerBgCEl.style.background = (cfg.colors && cfg.colors.background) ? cfg.colors.background : "#151823"; }catch(e){}
+
+  // Optional: apply skew via CSS (matches FinisherHeader "skew" control)
+  try{
+    const deg = (cfg && cfg.skew != null) ? Number(cfg.skew) : 0;
+    playerBgCEl.style.transformOrigin = "center";
+    playerBgCEl.style.transform = `skewY(${Number.isFinite(deg) ? deg : 0}deg)`;
+  }catch(e){}
+
+
+  try{
+    finisherInstance = new window.FinisherHeader(cfg);
+    finisherModeKey = key;
+  }catch(e){
+    console.error("Failed to init FinisherHeader:", e);
+    destroyFinisher();
+  }
+}
+
+function applyPlayerBgMode(_mode){
+  // Background A/B/C/D testing is no longer used.
+  // We always run the FinisherHeader background (C) for the full player UI.
+  if (!IS_PLAYER_PAGE) return;
+
+  currentPlayerBgMode = "C";
+  document.body.classList.remove("playerStaticBg", "playerBgModeB", "playerBgModeD");
+  document.documentElement.classList.remove("playerStaticBg", "playerBgModeB", "playerBgModeD");
+  document.body.classList.add("playerBgModeC");
+  document.documentElement.classList.add("playerBgModeC");
+
+  if (playerBgBEl) playerBgBEl.classList.add("hidden");
+  if (playerBgCEl) playerBgCEl.classList.remove("hidden");
+
+  ensureFinisher("C");
+}
+
+// Default: FinisherHeader background is always active
+applyPlayerBgMode("C");
+
 let picked = null;
 let confirmed = false;
 let lastPhase = null;
@@ -67,6 +176,40 @@ const playerMathRow = document.getElementById("playerMathRow");
 const deadNoise = document.getElementById("deadNoise");
 const survivedFx = document.getElementById("survivedFx");
 
+// Player-side info reveal overlay (used automatically when the info screen is not connected)
+const playerRevealOverlay = document.getElementById("playerRevealOverlay");
+const playerRevealBlackout = document.getElementById("playerRevealBlackout");
+const playerRevealStage = document.getElementById("playerRevealStage");
+const playerRevealRoundRules = document.getElementById("playerRevealRoundRules");
+const infoScene = document.getElementById("infoScene");
+const infoNamesRow = document.getElementById("infoNamesRow");
+const infoGuessesRow = document.getElementById("infoGuessesRow");
+const infoMathRow = document.getElementById("infoMathRow");
+const infoAvgVal = document.getElementById("infoAvgVal");
+const infoTargetVal = document.getElementById("infoTargetVal");
+const infoScoresRow = document.getElementById("infoScoresRow");
+const infoDeltasRow = document.getElementById("infoDeltasRow");
+
+let localRevealReadyRound = null; // local override (player reveal)
+let playerRevealInProgress = false;
+let playerRevealPlayedRound = null;
+let playerRevealPendingResume = false;
+let playerRevealPendingRound = null;
+let playerRevealPendingTotalMs = 12000;
+let playerRevealTimers = [];
+let overlayPrevScores = new Map();
+
+// Round-rule intro overlay (shown when info screen is not connected)
+let playerRuleIntroInProgress = false;
+let playerRuleIntroPlayedRound = null;
+let playerRuleIntroTimers = [];
+
+// Keep rule-intro logic identical to /info.html: we detect which rules became active
+// compared to the previous round and show the "Nieuwe Regel" overlay for those.
+let priPrevActiveRules = { r1: false, r2: false, r3: false };
+let priDelayTimer = null;
+let priDelayRound = null;
+
 const SS_KEY = "tbs_player_key";
 function getPlayerKey() {
   let k = sessionStorage.getItem(SS_KEY);
@@ -80,6 +223,23 @@ function getPlayerKey() {
 let hasJoined = false;
 let lastState = null;
 let autoJoinAttempted = false;
+
+// Simple server clock sync (state.serverNow is sent by server)
+let serverOffsetMs = 0;
+function updateServerClock(state){
+  const sn = state && typeof state.serverNow === "number" ? state.serverNow : null;
+  if (sn != null && Number.isFinite(sn)) {
+    serverOffsetMs = sn - Date.now();
+  }
+}
+function serverNow(){
+  return Date.now() + serverOffsetMs;
+}
+function revealElapsedMs(state){
+  const rs = state && typeof state.revealStartedAt === "number" ? state.revealStartedAt : null;
+  if (rs == null || !Number.isFinite(rs)) return null;
+  return Math.max(0, serverNow() - rs);
+}
 
 // rule pulse tracking (10s) + timer to stop without new socket event
 let prevRuleActive = { r1: false, r2: false, r3: false };
@@ -431,6 +591,457 @@ function closeScoreboardPanel() {
 }
 
 
+// ---------------- Player-side Info Reveal (optional) ----------------
+function prClearTimers() {
+  for (const t of playerRevealTimers) clearTimeout(t);
+  playerRevealTimers.length = 0;
+}
+
+function prSetTimeout(fn, ms) {
+  const __epoch = visEpoch;
+  const tid = setTimeout(() => {
+    if (__epoch !== visEpoch) return;
+    if (document.hidden) return;
+    fn();
+  }, ms);
+  playerRevealTimers.push(tid);
+  return tid;
+}
+
+// ---------------- Round rule intro overlay (player reveal mode) ----------------
+function priClearTimers() {
+  for (const t of playerRuleIntroTimers) clearTimeout(t);
+  playerRuleIntroTimers.length = 0;
+}
+
+function priSetTimeout(fn, ms) {
+  const __epoch = visEpoch;
+  const tid = setTimeout(() => {
+    if (__epoch !== visEpoch) return;
+    if (document.hidden) return;
+    fn();
+  }, ms);
+  playerRuleIntroTimers.push(tid);
+  return tid;
+}
+
+function priHideRoundRulesOverlay() {
+  if (!playerRevealRoundRules) return;
+  playerRevealRoundRules.classList.add("hidden");
+  playerRevealRoundRules.classList.remove("show");
+  playerRevealRoundRules.classList.remove("fadeOut");
+  playerRevealRoundRules.innerHTML = "";
+}
+
+function priShowRoundRulesOverlayFromLines(lines) {
+  if (!playerRevealRoundRules) return;
+  if (!lines || lines.length === 0) {
+    priHideRoundRulesOverlay();
+    return;
+  }
+
+  playerRevealRoundRules.innerHTML = `
+    <div class="rrTitle">Nieuwe Regel</div>
+    <div class="rrBig">
+      ${lines.map((t) => `<div class="rrLine">${t}</div>`).join("")}
+    </div>
+  `;
+
+  playerRevealRoundRules.classList.remove("hidden");
+  playerRevealRoundRules.classList.remove("fadeOut");
+  requestAnimationFrame(() => playerRevealRoundRules.classList.add("show"));
+
+  // Match /info.html timing: show ~10s, then fade text, then hide.
+  priSetTimeout(() => {
+    if (!playerRevealRoundRules) return;
+    playerRevealRoundRules.classList.add("fadeOut");
+  }, 10000);
+
+  priSetTimeout(() => {
+    priHideRoundRulesOverlay();
+  }, 11200);
+}
+
+function priComputeNewRuleLines(state) {
+  const rr = state.roundRules || {};
+  const now = {
+    r1: !!rr.duplicatesInvalid,
+    r2: !!rr.exactDoublePenalty,
+    r3: !!rr.zeroHundredSpecial,
+  };
+
+  const newOn = {
+    r1: now.r1 && !priPrevActiveRules.r1,
+    r2: now.r2 && !priPrevActiveRules.r2,
+    r3: now.r3 && !priPrevActiveRules.r3,
+  };
+
+  priPrevActiveRules = now;
+
+  const lines = [];
+  if (newOn.r1) lines.push("1. Dubbele getallen zijn ongeldig en leveren -1 punt op.");
+  if (newOn.r2) lines.push("2. Exact geraden getallen geven de verliezers -2 punten.");
+  if (newOn.r3) lines.push("3. Kiest een speler 0, dan wint de ander door 100 te kiezen.");
+  return lines;
+}
+
+function stopPlayerRuleIntro() {
+  if (priDelayTimer) {
+    clearTimeout(priDelayTimer);
+    priDelayTimer = null;
+  }
+  priDelayRound = null;
+  priClearTimers();
+  playerRuleIntroInProgress = false;
+  priHideRoundRulesOverlay();
+  // Hide the overlay entirely unless the reveal animation is currently running.
+  if (!playerRevealInProgress) prHideOverlay();
+}
+
+function startPlayerRuleIntro(state) {
+  if (!playerRevealOverlay || !playerRevealBlackout || !playerRevealRoundRules) return;
+  if (playerRevealInProgress) return; // don't interfere with the reveal timeline
+  if (playerRuleIntroInProgress) return;
+  if (playerRuleIntroPlayedRound === state.round) return;
+
+  // Cancel any previous delayed show
+  if (priDelayTimer) {
+    clearTimeout(priDelayTimer);
+    priDelayTimer = null;
+  }
+
+  // Only show this overlay when the info screen is NOT connected.
+  if ((state.infoClientCount || 0) !== 0) return;
+
+  const lines = priComputeNewRuleLines(state);
+  if (!lines.length) return;
+
+  // If hidden, don't animate — just mark as shown.
+  if (document.hidden) {
+    playerRuleIntroPlayedRound = state.round;
+    return;
+  }
+
+  playerRuleIntroPlayedRound = state.round;
+  playerRuleIntroInProgress = true;
+  priDelayRound = state.round;
+
+  // Match /info.html: wait ~1s before showing the "Nieuwe Regel" overlay.
+  priDelayTimer = setTimeout(() => {
+    priDelayTimer = null;
+    if (!lastState) { stopPlayerRuleIntro(); return; }
+    if (lastState.phase !== "collecting" || lastState.round !== priDelayRound) { stopPlayerRuleIntro(); return; }
+    if ((lastState.infoClientCount || 0) !== 0) { stopPlayerRuleIntro(); return; }
+
+    priHideRoundRulesOverlay();
+    prShowOverlay();
+    playerRevealOverlay.classList.remove("showStage");
+    prSetBlack(true);
+
+    // Show rules overlay (includes its own fade/hide timers)
+    priShowRoundRulesOverlayFromLines(lines);
+
+    // When the rules overlay is done, fade back to the player UI
+    priSetTimeout(() => {
+      if (!playerRevealInProgress) prSetBlack(false);
+    }, 11200);
+
+    priSetTimeout(() => {
+      if (!playerRevealInProgress) prHideOverlay();
+      playerRuleIntroInProgress = false;
+    }, 11200 + 460);
+  }, 1000);
+}
+
+function prFmt2(n) {
+  if (typeof n !== "number") return "—";
+  return (Math.round(n * 100) / 100).toFixed(2);
+}
+
+function prSetScoreStatic(el, value, isBad) {
+  el.innerHTML = `<div class="scoreNum live ${isBad ? "bad" : "good"}">${value}</div>`;
+}
+
+function prAnimateScoreNumber(el, from, to, isBad) {
+  el.innerHTML = "";
+
+  const oldNode = document.createElement("div");
+  oldNode.className = "scoreNum live " + (isBad ? "bad" : "good");
+  oldNode.textContent = String(from);
+
+  const newNode = document.createElement("div");
+  newNode.className = "scoreNum in " + (isBad ? "bad" : "good");
+  newNode.textContent = String(to);
+
+  el.appendChild(oldNode);
+  el.appendChild(newNode);
+
+  prSetTimeout(() => {
+    requestAnimationFrame(() => {
+      oldNode.classList.add("out");
+      oldNode.classList.remove("live");
+      newNode.classList.remove("in");
+      newNode.classList.add("live");
+    });
+  }, 300);
+}
+
+function prBuildRevealScene(state, opts = {}) {
+  const instant = !!opts.instant;
+  if (!infoScene) return { start: () => {}, duration: 0 };
+
+  // reset classes
+  infoScene.classList.remove("s1","s2","s3a","s3","s3b","s4a","s4","ready","instant");
+  if (infoNamesRow) infoNamesRow.innerHTML = "";
+  if (infoGuessesRow) infoGuessesRow.innerHTML = "";
+  if (infoScoresRow) infoScoresRow.innerHTML = "";
+  if (infoDeltasRow) infoDeltasRow.innerHTML = "";
+
+  const lr = state.lastRound || {};
+  if (infoAvgVal) infoAvgVal.textContent = prFmt2(lr.average);
+  if (infoTargetVal) infoTargetVal.textContent = prFmt2(lr.target);
+
+  const list = (state.players || []).slice().sort((a,b)=> String(a.name||"").localeCompare(String(b.name||"")));
+  const pendingScoreAnims = [];
+  const allScoreCells = [];
+
+  for (const p of list) {
+    // Names (hidden at first)
+    const nameCell = document.createElement("div");
+    nameCell.className = "infoCell infoName";
+    nameCell.textContent = p.name;
+    infoNamesRow?.appendChild(nameCell);
+
+    // Guess tile
+    const guessCell = document.createElement("div");
+    guessCell.className = "infoCell infoGuessTile";
+    guessCell.innerHTML = `<div class="guessNum">${(typeof p.lastGuess === "number") ? p.lastGuess : "—"}</div>`;
+    infoGuessesRow?.appendChild(guessCell);
+
+    const d = (typeof p.lastDelta === "number") ? p.lastDelta : 0;
+    const isBad = d < 0;
+
+    // Winner flag (glow is applied later, together with min points)
+    const isWinner = Array.isArray(lr.winnerIds) && lr.winnerIds.includes(p.id);
+    if (isWinner) {
+      guessCell.dataset.winner = "1";
+      nameCell.dataset.winner = "1";
+    }
+
+    // Total score (animate from previous)
+    const scoreCell = document.createElement("div");
+    scoreCell.className = "infoCell infoScore";
+    const prev = (typeof p.prevScore === "number") ? p.prevScore : (overlayPrevScores.has(p.id) ? overlayPrevScores.get(p.id) : null);
+    const from = (typeof prev === "number") ? prev : ((typeof p.score === "number" && typeof d === "number") ? (p.score - d) : p.score);
+    const to = p.score;
+    allScoreCells.push({ el: scoreCell, to });
+
+    if (instant) {
+      const bad = (typeof to === "number") ? (to < 0) : false;
+      prSetScoreStatic(scoreCell, to, bad);
+    } else {
+      scoreCell.innerHTML = `<div class="scoreNum live ${isBad ? "bad" : "good"}">${from}</div>`;
+      if (isBad && typeof from === "number" && typeof to === "number" && to !== from) {
+        pendingScoreAnims.push({ el: scoreCell, from, to });
+      }
+    }
+    infoScoresRow?.appendChild(scoreCell);
+    overlayPrevScores.set(p.id, p.score);
+
+    // Delta (static)
+    const deltaCell = document.createElement("div");
+    deltaCell.className = "infoCell infoDelta";
+    const isBadDelta = d < 0;
+    const txt = (typeof d === "number") ? (d === 0 ? "0" : String(d)) : "0";
+    deltaCell.innerHTML = `<div class="deltaNum ${isBadDelta ? "bad" : "neutral"}">${txt}</div>`;
+    infoDeltasRow?.appendChild(deltaCell);
+  }
+
+  const snapToEnd = () => {
+    infoScene.classList.add("instant");
+    infoScene.classList.add("ready","s1","s2","s3a","s3","s3b","s4a","s4");
+    for (const el of document.querySelectorAll('[data-winner="1"]')) el.classList.add("winner");
+    for (const sc of allScoreCells) {
+      const bad = (typeof sc.to === "number") ? (sc.to < 0) : false;
+      prSetScoreStatic(sc.el, sc.to, bad);
+    }
+  };
+
+  if (instant) {
+    snapToEnd();
+    return { start: () => {}, duration: 0 };
+  }
+
+  const applyAt = (ms) => {
+    const t = Math.max(0, Number(ms || 0));
+    infoScene.classList.add("instant");
+    infoScene.classList.add("ready");
+    infoScene.classList.add("s1");
+    if (t >= 1600) infoScene.classList.add("s2");
+    if (t >= 3000) infoScene.classList.add("s3a");
+    if (t >= 3800) infoScene.classList.add("s3");
+    if (t >= 4600) infoScene.classList.add("s3b");
+    if (t >= 6200) infoScene.classList.add("s4a");
+    if (t >= 7600) {
+      infoScene.classList.add("s4");
+      for (const el of document.querySelectorAll('[data-winner="1"]')) el.classList.add("winner");
+    }
+
+    // Catch up scores
+    if (t >= 7600) {
+      if (t >= 8500) {
+        for (const sc of allScoreCells) {
+          const bad = (typeof sc.to === "number") ? (sc.to < 0) : false;
+          prSetScoreStatic(sc.el, sc.to, bad);
+        }
+      } else if (pendingScoreAnims.length) {
+        const delay = Math.max(0, 8500 - t);
+        prSetTimeout(() => {
+          for (const a of pendingScoreAnims) {
+            prAnimateScoreNumber(a.el, a.from, a.to, true);
+          }
+        }, delay);
+      }
+    }
+
+    requestAnimationFrame(() => requestAnimationFrame(() => infoScene.classList.remove("instant")));
+  };
+
+  const start = (startAtMs = 0) => {
+    const base = Math.max(0, Number(startAtMs || 0));
+    if (base >= 10300) {
+      snapToEnd();
+      return;
+    }
+
+    applyAt(base);
+
+    const schedule = (at, fn) => {
+      const d = at - base;
+      if (d <= 0) return;
+      prSetTimeout(fn, d);
+    };
+
+    schedule(1600, () => infoScene.classList.add("s2"));
+    schedule(3000, () => infoScene.classList.add("s3a"));
+    schedule(3800, () => infoScene.classList.add("s3"));
+    schedule(4600, () => infoScene.classList.add("s3b"));
+    schedule(6200, () => infoScene.classList.add("s4a"));
+    schedule(7600, () => {
+      infoScene.classList.add("s4");
+      for (const el of document.querySelectorAll('[data-winner="1"]')) el.classList.add("winner");
+      if (pendingScoreAnims.length) {
+        prSetTimeout(() => {
+          for (const a of pendingScoreAnims) {
+            prAnimateScoreNumber(a.el, a.from, a.to, true);
+          }
+        }, 900);
+      }
+    });
+  };
+
+  return { start, duration: 10300 };
+}
+
+function prHideOverlay() {
+  if (!playerRevealOverlay) return;
+  playerRevealOverlay.classList.add("hidden");
+  playerRevealOverlay.classList.remove("black","showStage");
+  playerRevealOverlay.setAttribute("aria-hidden", "true");
+}
+
+function prShowOverlay() {
+  if (!playerRevealOverlay) return;
+  playerRevealOverlay.classList.remove("hidden");
+  playerRevealOverlay.setAttribute("aria-hidden", "false");
+}
+
+function prSetBlack(on) {
+  if (!playerRevealOverlay) return;
+  if (on) {
+    requestAnimationFrame(() => playerRevealOverlay.classList.add("black"));
+  } else {
+    playerRevealOverlay.classList.remove("black");
+  }
+}
+
+function startPlayerReveal(state, opts = {}) {
+  if (!playerRevealOverlay || !playerRevealBlackout || !playerRevealStage || !infoScene) return;
+  if (playerRevealInProgress) return;
+  if (playerRevealPlayedRound === state.round) return;
+
+  const startAtMs = Math.max(0, Number(opts.startAtMs || 0));
+  const totalMs = Math.max(1000, Number(opts.durationMs || 12000));
+
+  // If the tab is hidden, don't attempt to run timers; we'll resync when visible.
+  if (document.hidden) {
+    playerRevealInProgress = true;
+    playerRevealPlayedRound = state.round;
+    playerRevealPendingResume = true;
+    playerRevealPendingRound = state.round;
+    playerRevealPendingTotalMs = totalMs;
+    return;
+  }
+
+  prClearTimers();
+  playerRevealInProgress = true;
+  playerRevealPlayedRound = state.round;
+  localRevealReadyRound = null;
+
+  // Make the player-side reveal feel identical to the info screen:
+  // - start the stage fade + timeline immediately (no extra waiting)
+  // - fade OUT (back to player UI) slightly slower
+  try{ playerRevealBlackout.style.transitionDuration = "420ms"; }catch(e){}
+
+  // Show overlay
+  playerRevealOverlay.classList.remove("hidden");
+  playerRevealOverlay.setAttribute("aria-hidden", "false");
+  playerRevealOverlay.classList.remove("black","showStage");
+
+  // Build DOM for this round
+  const { start, duration } = prBuildRevealScene(state, { instant: false });
+
+  // Fade to black + show the stage immediately (match info screen feel)
+  requestAnimationFrame(() => {
+    playerRevealOverlay.classList.add("black");
+    playerRevealOverlay.classList.add("showStage");
+    // Start the info timeline at the correct point (late-join sync)
+    requestAnimationFrame(() => start(startAtMs));
+  });
+
+  // End sequence: fade stage out to black, open scoreboard behind, fade back to player UI
+  const endAt = 0 + duration;
+  // Remaining timeline depends on startAtMs.
+  const remaining = Math.max(0, totalMs - startAtMs);
+  prSetTimeout(() => {
+    playerRevealOverlay.classList.remove("showStage");
+  }, Math.max(0, (endAt + 120) - startAtMs));
+
+  // While still black: open scoreboard instantly so it is already open when we fade back.
+  prSetTimeout(() => {
+    localRevealReadyRound = state.round;
+    renderScoreboard._suppressAnimRound = state.round;
+    document.body.classList.add("noAnim");
+    renderScoreboard(state, { instant: true });
+    requestAnimationFrame(() => requestAnimationFrame(() => document.body.classList.remove("noAnim")));
+  }, Math.max(0, (endAt + 520) - startAtMs));
+
+  // Fade from black back to player UI
+  const OUT_MS = 900; // slightly slower out-fade (user request)
+  prSetTimeout(() => {
+    try{ playerRevealBlackout.style.transitionDuration = OUT_MS + "ms"; }catch(e){}
+    playerRevealOverlay.classList.remove("black");
+  }, Math.max(0, (endAt + 620) - startAtMs));
+
+  // Hide overlay fully (after the slower fade)
+  prSetTimeout(() => {
+    prHideOverlay();
+    playerRevealInProgress = false;
+    try{ playerRevealBlackout.style.transitionDuration = "420ms"; }catch(e){}
+  }, Math.max(0, (endAt + 620 + OUT_MS + 180) - startAtMs));
+}
+
+
 
 
 function renderScoreboard(state, opts = {}) {
@@ -688,6 +1299,19 @@ socket.on("kicked", () => {
 
 socket.on("state", (state) => {
   lastState = state;
+  updateServerClock(state);
+
+  // Optional: host can live-edit FinisherHeader configs (modes C/D)
+  if (state.playerFinisherConfigs) {
+    try{
+      if (state.playerFinisherConfigs.C) finisherCfgCFromServer = state.playerFinisherConfigs.C;
+      if (state.playerFinisherConfigs.D) finisherCfgDFromServer = state.playerFinisherConfigs.D;
+    }catch(e){}
+  }
+
+  // Apply host-controlled player background mode (A/B/C/D)
+  if (state.playerBgMode) applyPlayerBgMode(state.playerBgMode);
+
 
   const myKey = getPlayerKey();
   const me = state.players.find((p) => p.key === myKey);
@@ -734,6 +1358,19 @@ socket.on("state", (state) => {
     sessionStorage.removeItem(SS_CASCADE_KEY);
     setDeadTheme(false);
     setSurvivedTheme(false);
+
+    // reset player-reveal overlay state
+    prClearTimers();
+    playerRevealInProgress = false;
+    playerRevealPlayedRound = null;
+    localRevealReadyRound = null;
+    prHideOverlay();
+
+    // reset rule-intro overlay state
+    priClearTimers();
+    playerRuleIntroInProgress = false;
+    playerRuleIntroPlayedRound = null;
+    priHideRoundRulesOverlay();
     return;
   }
 
@@ -777,6 +1414,12 @@ socket.on("state", (state) => {
         sessionStorage.setItem(SS_CASCADE_KEY, "1");
         startGridCascade();
       }
+
+      // If the info screen is NOT connected, also show new rule announcements
+      // as a full-screen overlay on the player (match the info screen style).
+      if ((state.infoClientCount || 0) === 0) {
+        startPlayerRuleIntro(state);
+      }
     }
 
     // IMPORTANT: also react to dev-fill (or late server-side submit) DURING the round.
@@ -788,6 +1431,12 @@ socket.on("state", (state) => {
 
     // Zodra we uit de reveal fase gaan, moet het scoreboard-paneel ook weer inklappen.
     // Scoreboard volledig inklappen (anders blijft er een leeg vlak staan).
+    // Also stop any player-side reveal overlay.
+    prClearTimers();
+    playerRevealInProgress = false;
+    playerRevealPlayedRound = null;
+    localRevealReadyRound = null;
+    if (!playerRuleIntroInProgress) prHideOverlay();
     closeScoreboardPanel();
     pendingRevealState = null;
     renderScoreboard._suppressAnimRound = null;
@@ -796,21 +1445,46 @@ socket.on("state", (state) => {
 
 
   if (state.phase === "revealed") {
+    // If we were showing a rule-intro overlay, stop it when the reveal starts.
+    if (playerRuleIntroInProgress) stopPlayerRuleIntro();
+
     grid.classList.add("revealLock");
     confirmBtn.disabled = true;
     // Make sure my confirmed choice stays visible (even if the collecting update was missed).
     if (!iAmDead && !document.body.classList.contains("survivedTheme")) {
       applySubmittedUI(me);
     }
-  pendingRevealState = state;
+    pendingRevealState = state;
 
-  // Only open the scoreboard when the info screen has finished its reveal animation.
-  if (state.revealReadyRound === state.round) {
-    renderScoreboard(state, { instant: document.hidden });
-  } else {
-    // Keep it closed while waiting.
-    closeScoreboardPanel();
-  }
+    const revealDur = (typeof state.revealDurationMs === "number" && Number.isFinite(state.revealDurationMs))
+      ? state.revealDurationMs
+      : 12000;
+    const elapsed = revealElapsedMs(state);
+    const shouldPlayerReveal = state.revealDriver === "player";
+
+    // If we're definitely past the reveal duration, allow instant skip -> scoreboard.
+    if (shouldPlayerReveal && elapsed != null && elapsed >= revealDur) {
+      localRevealReadyRound = state.round;
+      playerRevealInProgress = false;
+      prClearTimers();
+      prHideOverlay();
+    }
+
+    const ready = (state.revealReadyRound === state.round) || (localRevealReadyRound === state.round);
+
+    if (shouldPlayerReveal && !ready) {
+      // Keep scoreboard closed while animating.
+      closeScoreboardPanel();
+      startPlayerReveal(state, { startAtMs: elapsed || 0, durationMs: revealDur });
+    } else if (ready) {
+      // Normal behavior: only open after reveal is ready.
+      prClearTimers();
+      playerRevealInProgress = false;
+      if (!playerRuleIntroInProgress) prHideOverlay();
+      renderScoreboard(state, { instant: document.hidden });
+    } else {
+      closeScoreboardPanel();
+    }
 }
 
 
@@ -823,33 +1497,59 @@ document.addEventListener("visibilitychange", () => {
   visEpoch++;
   const s = pendingRevealState || lastState;
 
+  // Cancel delayed timers that could fire unexpectedly after tab throttling.
+  clearTimeout(renderScoreboard._tShow);
+  clearTimeout(renderScoreboard._tShow2);
+  clearTimeout(renderScoreboard._tHide);
+  clearTimeout(closeScoreboardPanel._tCollapse);
+  clearTimeout(closeScoreboardPanel._tReset);
+  clearScoreAnimTimers();
+
   if (document.hidden) {
-    document.body.classList.add("noAnim");
-    // Cancel delayed timers that could fire on return.
-    clearTimeout(renderScoreboard._tShow);
-    clearTimeout(renderScoreboard._tShow2);
-    clearTimeout(renderScoreboard._tHide);
-    clearTimeout(closeScoreboardPanel._tCollapse);
-    clearTimeout(closeScoreboardPanel._tReset);
-    clearScoreAnimTimers();
-
-    if (!s || s.phase !== "revealed" || s.revealReadyRound !== s.round) {
-      closeScoreboardPanel();
-      return;
+    // Stop player-side reveal timers; we'll resync when visible.
+    if (s && s.phase === "revealed" && s.revealDriver === "player" && playerRevealInProgress) {
+      prClearTimers();
+      playerRevealPendingResume = true;
+      playerRevealPendingRound = s.round;
+      playerRevealPendingTotalMs = (typeof s.revealDurationMs === "number" && Number.isFinite(s.revealDurationMs)) ? s.revealDurationMs : 12000;
     }
-
-    renderScoreboard._suppressAnimRound = (s.round || 0);
-    renderScoreboard(s, { instant: true });
     return;
   }
 
-  // Visible again: keep noAnim while catching up so nothing "replays".
+  // Visible again: catch up instantly (no replay).
+  if (!s) return;
+
   document.body.classList.add("noAnim");
-  if (s && s.phase === "revealed" && s.revealReadyRound === s.round) {
+
+  if (s.phase === "revealed" && s.revealDriver === "player") {
+    const revealDur = (typeof s.revealDurationMs === "number" && Number.isFinite(s.revealDurationMs)) ? s.revealDurationMs : 12000;
+    const elapsed = revealElapsedMs(s) || 0;
+    const ready = (s.revealReadyRound === s.round) || (localRevealReadyRound === s.round) || (elapsed >= revealDur);
+
+    if (ready) {
+      localRevealReadyRound = s.round;
+      prClearTimers();
+      playerRevealInProgress = false;
+      prHideOverlay();
+      renderScoreboard._suppressAnimRound = (s.round || 0);
+      renderScoreboard(s, { instant: true });
+    } else {
+      closeScoreboardPanel();
+      // Restart reveal at correct offset.
+      prClearTimers();
+      playerRevealInProgress = false;
+      playerRevealPlayedRound = null;
+      const totalMs = playerRevealPendingResume ? playerRevealPendingTotalMs : revealDur;
+      playerRevealPendingResume = false;
+      startPlayerReveal(s, { startAtMs: elapsed, durationMs: totalMs });
+    }
+  } else if (s.phase === "revealed" && ((s.revealReadyRound === s.round) || (localRevealReadyRound === s.round))) {
+    renderScoreboard._suppressAnimRound = (s.round || 0);
     renderScoreboard(s, { instant: true });
   } else {
     closeScoreboardPanel();
   }
+
   requestAnimationFrame(() => document.body.classList.remove("noAnim"));
 });
 

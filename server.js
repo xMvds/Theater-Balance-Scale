@@ -32,6 +32,44 @@ const game = {
   byKey: {}, // playerKey -> socketId
   lastRound: null,
 
+  // Reveal sync (option 2):
+  // If no info screen is connected when the host presses Reveal,
+  // players will run the reveal locally based on a shared start timestamp.
+  revealDriver: null, // "info" | "player" | null
+  revealStartedAt: null, // epoch ms
+  revealDurationMs: null,
+  infoClientCount: 0,
+
+  // Player background mode, controlled from the host
+  // A = static image, B = animated blobs, C/D = FinisherHeader particles
+  // Default is C.
+  playerBgMode: "C",
+
+
+  // FinisherHeader configs for player background modes C and D (editable from host BG editor).
+  playerFinisherConfigs: {
+    C: {
+      "count": 7,
+      "size": { "min": 298, "max": 506, "pulse": 0.19 },
+      "speed": { "x": { "min": 0, "max": 0.06 }, "y": { "min": 0, "max": 0.1 } },
+      "colors": { "background": "#0b0d12", "particles": ["#2e2f33"] },
+      "blending": "screen",
+      "opacity": { "center": 0.09, "edge": 0 },
+      "skew": 0,
+      "shapes": ["c"]
+    },
+    D: {
+      "count": 7,
+      "size": { "min": 298, "max": 506, "pulse": 0.19 },
+      "speed": { "x": { "min": 0, "max": 0.06 }, "y": { "min": 0, "max": 0.1 } },
+      "colors": { "background": "#0b0d12", "particles": ["#2e2f33"] },
+      "blending": "screen",
+      "opacity": { "center": 0.09, "edge": 0 },
+      "skew": 0,
+      "shapes": ["c"]
+    }
+  },
+
   // snapshot rules for the current round (set ONLY at round start)
   roundRules: null,
   ruleIntro: null,
@@ -43,9 +81,11 @@ const game = {
   gameOver: false,
 };
 
-// Fallback: if the info screen never signals completion (e.g. not open),
-// auto-unlock the player scoreboard after the expected animation duration.
-const INFO_ANIM_TOTAL_MS = 11000; // ms
+// Reveal timing (must match the front-end timelines)
+// Info screen emits `info_reveal_done` at ~10300ms.
+const INFO_ANIM_TOTAL_MS = 10300; // ms
+// Player-side reveal includes the info timeline + slower fade-out back to UI.
+const PLAYER_REVEAL_TOTAL_MS = 12000; // ms
 let revealReadyTimer = null;
 
 // Allow dev fill from player debug UI only when explicitly enabled.
@@ -64,6 +104,13 @@ function clearRevealReady() {
     clearTimeout(revealReadyTimer);
     revealReadyTimer = null;
   }
+}
+
+function clearRevealSync() {
+  game.revealDriver = null;
+  game.revealStartedAt = null;
+  game.revealDurationMs = null;
+  clearRevealReady();
 }
 
 
@@ -150,6 +197,14 @@ function broadcastState() {
     phase: game.phase,
     round: game.round,
     aliveNow,
+    // Reveal sync metadata (option 2)
+    revealDriver: game.revealDriver,
+    revealStartedAt: game.revealStartedAt,
+    revealDurationMs: game.revealDurationMs,
+    infoClientCount: game.infoClientCount || 0,
+    serverNow: Date.now(),
+    playerBgMode: game.playerBgMode || "C",
+    playerFinisherConfigs: game.playerFinisherConfigs || null,
     roundRules: game.roundRules,
     ruleIntro: game.ruleIntro,
     players: playersList,
@@ -289,7 +344,7 @@ function kickAll() {
   game.roundRules = null;
   game.ruleIntro = null;
   game.gameOver = false;
-  clearRevealReady();
+  clearRevealSync();
   broadcastState();
 }
 
@@ -311,6 +366,82 @@ io.on("connection", (socket) => {
 	    // This keeps the current lobby/game intact when the host comes in later.
 	    broadcastState();
   });
+
+  // Info screen announces itself so we can auto-switch the reveal driver.
+  socket.on("info_hello", () => {
+    if (socket.data.isInfo) return;
+    socket.data.isInfo = true;
+    game.infoClientCount = Math.max(0, (game.infoClientCount || 0) + 1);
+    broadcastState();
+  });
+
+  // Host can switch the PLAYER background for quick A/B/C/D testing.
+socket.on("host_player_bg_mode", ({ mode } = {}) => {
+  if (!socket.data.isHost) return;
+  const next = (mode === "B" || mode === "C" || mode === "D") ? mode : "A";
+  if (game.playerBgMode === next) return;
+  game.playerBgMode = next;
+  broadcastState();
+});
+
+  // Host can update FinisherHeader configs (for player BG modes C/D) live from the BG editor.
+  socket.on("host_player_bg_finisher_config", ({ key, config } = {}) => {
+    if (!socket.data.isHost) return;
+    const k = (key === "D") ? "D" : "C";
+
+    // Basic sanitization / clamping (keeps state safe-ish, even if someone sends nonsense).
+    const toNum = (v, fallback) => {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : fallback;
+    };
+    const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
+
+    const cfg = config && typeof config === "object" ? config : {};
+    const out = {
+      count: Math.round(clamp(toNum(cfg.count, 7), 1, 40)),
+      size: {
+        min: Math.round(clamp(toNum(cfg.size?.min, 298), 20, 1200)),
+        max: Math.round(clamp(toNum(cfg.size?.max, 506), 20, 1600)),
+        pulse: clamp(toNum(cfg.size?.pulse, 0.19), 0, 1),
+      },
+      speed: {
+        x: {
+          min: clamp(toNum(cfg.speed?.x?.min, 0), -2, 2),
+          max: clamp(toNum(cfg.speed?.x?.max, 0.06), -2, 2),
+        },
+        y: {
+          min: clamp(toNum(cfg.speed?.y?.min, 0), -2, 2),
+          max: clamp(toNum(cfg.speed?.y?.max, 0.1), -2, 2),
+        },
+      },
+      colors: {
+        background: String(cfg.colors?.background || "#0b0d12"),
+        particles: Array.isArray(cfg.colors?.particles) && cfg.colors.particles.length
+          ? cfg.colors.particles.map((c) => String(c))
+          : ["#2e2f33"],
+      },
+      blending: String(cfg.blending || "screen"),
+      opacity: {
+        center: clamp(toNum(cfg.opacity?.center, 0.09), 0, 1),
+        edge: clamp(toNum(cfg.opacity?.edge, 0), 0, 1),
+      },
+      skew: clamp(toNum(cfg.skew, 0), -45, 45),
+      shapes: Array.isArray(cfg.shapes) && cfg.shapes.length ? cfg.shapes.map((s)=>String(s)) : ["c"],
+    };
+
+    // Ensure size min <= max
+    if (out.size.min > out.size.max) {
+      const t = out.size.min; out.size.min = out.size.max; out.size.max = t;
+    }
+
+    if (!game.playerFinisherConfigs) game.playerFinisherConfigs = {};
+    game.playerFinisherConfigs[k] = out;
+    broadcastState();
+  });
+
+
+
+
 
 
 // Info screen signals when its reveal animation is finished.
@@ -440,7 +571,7 @@ socket.on("join", ({ name, playerKey }) => {
     game.phase = "collecting";
     game.round += 1;
 
-    clearRevealReady();
+    clearRevealSync();
     resetForNewRound();
     setRoundRulesSnapshot(); // snapshot rules at ROUND START
 
@@ -458,12 +589,19 @@ socket.on("join", ({ name, playerKey }) => {
     game.gameOver = aliveIds().length <= 1;
 
     clearRevealReady();
-    // Fallback unlock if info isn't running
+
+    // Option 2: automatic driver.
+    // If no info screen is connected when reveal starts, players will run the reveal locally.
+    game.revealDriver = (game.infoClientCount || 0) > 0 ? "info" : "player";
+    game.revealStartedAt = Date.now();
+    game.revealDurationMs = (game.revealDriver === "player") ? PLAYER_REVEAL_TOTAL_MS : INFO_ANIM_TOTAL_MS;
+
+    // Deterministic unlock time so late-joining tabs can skip the reveal.
     revealReadyTimer = setTimeout(() => {
       if (game.phase === "revealed" && game.revealReadyRound !== game.round) {
         markRevealReady(game.round);
       }
-    }, INFO_ANIM_TOTAL_MS);
+    }, game.revealDurationMs);
 
     broadcastState();
   });
@@ -476,7 +614,7 @@ socket.on("join", ({ name, playerKey }) => {
     game.phase = "collecting";
     game.round += 1;
 
-    clearRevealReady();
+    clearRevealSync();
     resetForNewRound();
     setRoundRulesSnapshot(); // snapshot rules for the new round
 
@@ -516,7 +654,7 @@ socket.on("host_reset", () => {
     game.roundRules = null;
     game.ruleIntro = null;
   game.gameOver = false;
-  clearRevealReady();
+  clearRevealSync();
 
     broadcastState();
   });
@@ -527,6 +665,9 @@ socket.on("host_reset", () => {
   });
 
   socket.on("disconnect", () => {
+    if (socket.data && socket.data.isInfo) {
+      game.infoClientCount = Math.max(0, (game.infoClientCount || 0) - 1);
+    }
     const p = game.players[socket.id];
     if (!p) {
       broadcastState();

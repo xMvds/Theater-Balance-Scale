@@ -24,6 +24,334 @@ document.addEventListener("DOMContentLoaded", () => {
   const nextBtn = document.getElementById("nextBtn");
   const devFillBtn = document.getElementById("devFillBtn");
   const resetBtn = document.getElementById("resetBtn");
+  // Player reveal is automatic (option 2): if no info screen is connected, players run the reveal.
+
+  // --- Player background test (A/B/C/D) ---
+// These buttons live on the HOST page, but they switch the BACKGROUND on all PLAYER screens.
+// A = static image background (bg_player_static_c.png)
+// B = animated blobs (experimental)
+// C = FinisherHeader particles (DEFAULT)
+// D = FinisherHeader particles (alt config)
+const bgTestA = document.getElementById("bgTestA");
+const bgTestB = document.getElementById("bgTestB");
+const bgTestC = document.getElementById("bgTestC");
+const bgTestD = document.getElementById("bgTestD");
+
+const LS_BG_MODE = "tbs_player_bg_mode";
+let playerBgMode = "C";
+try{
+  const saved = localStorage.getItem(LS_BG_MODE);
+  if (saved === "A" || saved === "B" || saved === "C" || saved === "D") playerBgMode = saved;
+}catch(e){}
+
+const applyPlayerBgUi = (mode) => {
+  bgTestA?.classList.toggle("active", mode === "A");
+  bgTestB?.classList.toggle("active", mode === "B");
+  bgTestC?.classList.toggle("active", mode === "C");
+  bgTestD?.classList.toggle("active", mode === "D");
+};
+
+const commitPlayerBgMode = (mode) => {
+  playerBgMode = (mode === "B" || mode === "C" || mode === "D") ? mode : "A";
+  applyPlayerBgUi(playerBgMode);
+  try{ localStorage.setItem(LS_BG_MODE, playerBgMode); }catch(e){}
+  socket.emit("host_player_bg_mode", { mode: playerBgMode });
+};
+
+bgTestA?.addEventListener("click", () => commitPlayerBgMode("A"));
+bgTestB?.addEventListener("click", () => commitPlayerBgMode(playerBgMode === "B" ? "A" : "B"));
+bgTestC?.addEventListener("click", () => commitPlayerBgMode(playerBgMode === "C" ? "A" : "C"));
+bgTestD?.addEventListener("click", () => commitPlayerBgMode(playerBgMode === "D" ? "A" : "D"));
+
+
+/* === BG editor (host): live edit FinisherHeader config (player BG mode C) === */
+const bgEditorBtn = document.getElementById("bgEditorBtn");
+const bgEditorModal = document.getElementById("bgEditorModal");
+const bgEditorCloseBtn = document.getElementById("bgEditorCloseBtn");
+const bgEditorResetBtn = document.getElementById("bgEditorResetBtn");
+const bgEditorCopyBtn = document.getElementById("bgEditorCopyBtn");
+
+const bgCount = document.getElementById("bgCount");
+const bgSizeMin = document.getElementById("bgSizeMin");
+const bgSizeMax = document.getElementById("bgSizeMax");
+const bgPulse = document.getElementById("bgPulse");
+const bgSpeedX = document.getElementById("bgSpeedX");
+const bgSpeedY = document.getElementById("bgSpeedY");
+const bgBgColor = document.getElementById("bgBgColor");
+const bgParticleColor = document.getElementById("bgParticleColor");
+const bgOpCenter = document.getElementById("bgOpCenter");
+const bgOpEdge = document.getElementById("bgOpEdge");
+const bgSkew = document.getElementById("bgSkew");
+
+const bgValCount = document.getElementById("bgValCount");
+const bgValSize = document.getElementById("bgValSize");
+const bgValPulse = document.getElementById("bgValPulse");
+const bgValSpeedX = document.getElementById("bgValSpeedX");
+const bgValSpeedY = document.getElementById("bgValSpeedY");
+const bgValBg = document.getElementById("bgValBg");
+const bgValParticle = document.getElementById("bgValParticle");
+const bgValBlend = document.getElementById("bgValBlend");
+const bgValOpCenter = document.getElementById("bgValOpCenter");
+const bgValOpEdge = document.getElementById("bgValOpEdge");
+const bgValSkew = document.getElementById("bgValSkew");
+const bgValShapes = document.getElementById("bgValShapes");
+
+const blendBtns = [
+  document.getElementById("bgBlendNone"),
+  document.getElementById("bgBlendOverlay"),
+  document.getElementById("bgBlendScreen"),
+  document.getElementById("bgBlendLighten"),
+].filter(Boolean);
+
+const shapeBtns = [
+  document.getElementById("bgShapeC"),
+  document.getElementById("bgShapeS"),
+  document.getElementById("bgShapeT"),
+].filter(Boolean);
+
+const BG_DEFAULT_C = {
+  "count": 7,
+  "size": { "min": 298, "max": 506, "pulse": 0.19 },
+  "speed": { "x": { "min": 0, "max": 0.06 }, "y": { "min": 0, "max": 0.1 } },
+  "colors": { "background": "#0b0d12", "particles": ["#2e2f33"] },
+  "blending": "screen",
+  "opacity": { "center": 0.09, "edge": 0 },
+  "skew": 0,
+  "shapes": ["c"]
+};
+
+let bgEditorOpen = false;
+let _bgEditorLocalCfgC = JSON.parse(JSON.stringify(BG_DEFAULT_C));
+let _bgEditorLatestCfgC = null;
+let _bgEditorDirtyAt = 0;
+let _bgEditorEmitT = null;
+
+const _bgEditorIsDirty = () => (Date.now() - _bgEditorDirtyAt) < 1200;
+
+const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
+const toNum = (v, fallback) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+};
+const toHex = (s, fallback) => {
+  const x = String(s || "").trim();
+  return /^#[0-9a-fA-F]{6}$/.test(x) ? x : fallback;
+};
+const deepCopy = (o) => JSON.parse(JSON.stringify(o));
+
+function bgEditorNormalizeCfg(cfg){
+  const c = cfg && typeof cfg === "object" ? cfg : {};
+  const out = {
+    count: Math.round(clamp(toNum(c.count, 7), 1, 40)),
+    size: {
+      min: Math.round(clamp(toNum(c.size?.min, 298), 20, 1200)),
+      max: Math.round(clamp(toNum(c.size?.max, 506), 20, 1600)),
+      pulse: clamp(toNum(c.size?.pulse, 0.19), 0, 1),
+    },
+    speed: {
+      x: { min: clamp(toNum(c.speed?.x?.min, 0), -2, 2), max: clamp(toNum(c.speed?.x?.max, 0.06), -2, 2) },
+      y: { min: clamp(toNum(c.speed?.y?.min, 0), -2, 2), max: clamp(toNum(c.speed?.y?.max, 0.1), -2, 2) },
+    },
+    colors: {
+      background: toHex(c.colors?.background, "#0b0d12"),
+      particles: [toHex((c.colors?.particles && c.colors.particles[0]) || "##2e2f33", "#3b3c46")],
+    },
+    blending: String(c.blending || "screen"),
+    opacity: {
+      center: clamp(toNum(c.opacity?.center, 0.09), 0, 1),
+      edge: clamp(toNum(c.opacity?.edge, 0), 0, 1),
+    },
+    skew: clamp(toNum(c.skew, 0), -20, 20),
+    shapes: Array.isArray(c.shapes) && c.shapes.length ? c.shapes.map((x)=>String(x)) : ["c"],
+  };
+  if (out.size.min > out.size.max) {
+    const t = out.size.min; out.size.min = out.size.max; out.size.max = t;
+  }
+  return out;
+}
+
+function bgEditorSetFromCfg(cfg){
+  const c = bgEditorNormalizeCfg(cfg);
+  _bgEditorLocalCfgC = deepCopy(c);
+
+  if (bgCount) bgCount.value = String(c.count);
+  if (bgSizeMin) bgSizeMin.value = String(c.size.min);
+  if (bgSizeMax) bgSizeMax.value = String(c.size.max);
+  if (bgPulse) bgPulse.value = String(c.size.pulse);
+  if (bgSpeedX) bgSpeedX.value = String(c.speed.x.max);
+  if (bgSpeedY) bgSpeedY.value = String(c.speed.y.max);
+  if (bgBgColor) bgBgColor.value = c.colors.background;
+  if (bgParticleColor) bgParticleColor.value = c.colors.particles[0];
+  if (bgOpCenter) bgOpCenter.value = String(c.opacity.center);
+  if (bgOpEdge) bgOpEdge.value = String(c.opacity.edge);
+  if (bgSkew) bgSkew.value = String(c.skew);
+
+  blendBtns.forEach((b) => {
+    const v = b.getAttribute("data-blend");
+    b.classList.toggle("active", String(v) === String(c.blending));
+  });
+  shapeBtns.forEach((b) => {
+    const v = b.getAttribute("data-shape");
+    b.classList.toggle("active", c.shapes.includes(String(v)));
+  });
+
+  // Value labels
+  if (bgValCount) bgValCount.textContent = String(c.count);
+  if (bgValSize) bgValSize.textContent = `${c.size.min} – ${c.size.max}`;
+  if (bgValPulse) bgValPulse.textContent = String(c.size.pulse.toFixed(2));
+  if (bgValSpeedX) bgValSpeedX.textContent = `0 – ${Number(c.speed.x.max).toFixed(2)}`;
+  if (bgValSpeedY) bgValSpeedY.textContent = `0 – ${Number(c.speed.y.max).toFixed(2)}`;
+  if (bgValBg) bgValBg.textContent = c.colors.background.toUpperCase();
+  if (bgValParticle) bgValParticle.textContent = c.colors.particles[0].toUpperCase();
+  if (bgValBlend) bgValBlend.textContent = String(c.blending);
+  if (bgValOpCenter) bgValOpCenter.textContent = String(Number(c.opacity.center).toFixed(2));
+  if (bgValOpEdge) bgValOpEdge.textContent = String(Number(c.opacity.edge).toFixed(2));
+  if (bgValSkew) bgValSkew.textContent = String(c.skew);
+  if (bgValShapes) bgValShapes.textContent = c.shapes.join(", ");
+}
+
+function bgEditorCommitLocal(){
+  const c = bgEditorNormalizeCfg({
+    count: toNum(bgCount?.value, _bgEditorLocalCfgC.count),
+    size: { 
+      min: toNum(bgSizeMin?.value, _bgEditorLocalCfgC.size.min),
+      max: toNum(bgSizeMax?.value, _bgEditorLocalCfgC.size.max),
+      pulse: toNum(bgPulse?.value, _bgEditorLocalCfgC.size.pulse),
+    },
+    speed: { 
+      x: { min: 0, max: toNum(bgSpeedX?.value, _bgEditorLocalCfgC.speed.x.max) },
+      y: { min: 0, max: toNum(bgSpeedY?.value, _bgEditorLocalCfgC.speed.y.max) },
+    },
+    colors: {
+      background: bgBgColor?.value,
+      particles: [bgParticleColor?.value],
+    },
+    blending: _bgEditorLocalCfgC.blending,
+    opacity: {
+      center: toNum(bgOpCenter?.value, _bgEditorLocalCfgC.opacity.center),
+      edge: toNum(bgOpEdge?.value, _bgEditorLocalCfgC.opacity.edge),
+    },
+    skew: toNum(bgSkew?.value, _bgEditorLocalCfgC.skew),
+    shapes: _bgEditorLocalCfgC.shapes,
+  });
+
+  _bgEditorLocalCfgC = deepCopy(c);
+  bgEditorSetFromCfg(_bgEditorLocalCfgC);
+}
+
+function bgEditorEmit(){
+  if (!socket) return;
+  socket.emit("host_player_bg_finisher_config", { key: "C", config: _bgEditorLocalCfgC });
+}
+
+function bgEditorEmitDebounced(){
+  _bgEditorDirtyAt = Date.now();
+  if (_bgEditorEmitT) clearTimeout(_bgEditorEmitT);
+  _bgEditorEmitT = setTimeout(() => {
+    _bgEditorEmitT = null;
+    bgEditorCommitLocal();
+    bgEditorEmit();
+  }, 60);
+}
+
+function bgEditorOpenModal(){
+  bgEditorOpen = true;
+  bgEditorModal?.classList.remove("hidden");
+  // helpful default: switch players to C so you can see changes immediately
+  commitPlayerBgMode("C");
+
+  const use = _bgEditorLatestCfgC || _bgEditorLocalCfgC || BG_DEFAULT_C;
+  bgEditorSetFromCfg(use);
+}
+
+function bgEditorCloseModal(){
+  bgEditorOpen = false;
+  bgEditorModal?.classList.add("hidden");
+}
+
+bgEditorBtn?.addEventListener("click", () => bgEditorOpenModal());
+bgEditorCloseBtn?.addEventListener("click", () => bgEditorCloseModal());
+bgEditorModal?.addEventListener("click", (e) => {
+  if (e.target === bgEditorModal) bgEditorCloseModal();
+});
+
+bgEditorResetBtn?.addEventListener("click", () => {
+  bgEditorSetFromCfg(BG_DEFAULT_C);
+  _bgEditorDirtyAt = Date.now();
+  bgEditorEmit();
+});
+
+bgEditorCopyBtn?.addEventListener("click", async () => {
+  try{
+    await navigator.clipboard.writeText(JSON.stringify(_bgEditorLocalCfgC, null, 2));
+    // small feedback: reuse existing "Gekopieerd" toast if present
+    const t = document.getElementById("debugToast");
+    if (t){ t.classList.remove("hidden"); setTimeout(()=>t.classList.add("hidden"), 900); }
+  }catch(e){}
+});
+
+// Input handlers (live)
+[
+  bgCount, bgSizeMin, bgSizeMax, bgPulse, bgSpeedX, bgSpeedY,
+  bgBgColor, bgParticleColor, bgOpCenter, bgOpEdge, bgSkew
+].filter(Boolean).forEach((el) => {
+  el.addEventListener("input", () => bgEditorEmitDebounced());
+});
+
+blendBtns.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    _bgEditorLocalCfgC.blending = String(btn.getAttribute("data-blend") || "none");
+    blendBtns.forEach((b) => b.classList.toggle("active", b === btn));
+    bgEditorEmitDebounced();
+  });
+});
+
+shapeBtns.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const s = String(btn.getAttribute("data-shape") || "c");
+    const set = new Set(_bgEditorLocalCfgC.shapes || []);
+    if (set.has(s)) set.delete(s); else set.add(s);
+    _bgEditorLocalCfgC.shapes = Array.from(set);
+    shapeBtns.forEach((b) => {
+      const v = String(b.getAttribute("data-shape") || "");
+      b.classList.toggle("active", _bgEditorLocalCfgC.shapes.includes(v));
+    });
+    bgEditorEmitDebounced();
+  });
+});
+/* === END BG editor (host) === */
+
+
+// Apply UI immediately; broadcast after host_hello so the server recognizes this socket as host.
+applyPlayerBgUi(playerBgMode);
+// --- end Player background test ---
+  // --- Settings panel (host) ---
+  const settingsBtn = document.getElementById("settingsBtn");
+  const settingsPanel = document.getElementById("settingsPanel");
+
+  const closeSettings = () => {
+    if (!settingsPanel) return;
+    settingsPanel.classList.add("hidden");
+  };
+
+  settingsBtn?.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!settingsPanel) return;
+    settingsPanel.classList.toggle("hidden");
+  });
+
+  settingsPanel?.addEventListener("click", (e) => {
+    e.stopPropagation();
+  });
+
+  document.addEventListener("click", () => closeSettings());
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeSettings();
+  });
+
+
+
 
   // --- Debug capture (host) ---
   const debugCopyBtn = document.getElementById("debugCopyBtn");
@@ -191,6 +519,8 @@ let resetArmed = false;
   startBtn?.addEventListener("click", () => socket.emit("host_start"));
   revealBtn?.addEventListener("click", () => socket.emit("host_reveal"));
   nextBtn?.addEventListener("click", () => socket.emit("host_next"));
+
+  // Player reveal is automatic now (option 2). No toggle.
 
   devFillBtn?.addEventListener("click", () => socket.emit("host_devfill"));
 
@@ -528,7 +858,18 @@ let resetArmed = false;
   socket.on("state", (state) => {
     lastState = state;
 
-    const playersTotal = state.players?.length ?? 0;
+    // Keep BG test buttons in sync with the current PLAYER background mode
+    if (state.playerBgMode) {
+      playerBgMode = (state.playerBgMode === "B" || state.playerBgMode === "C" || state.playerBgMode === "D") ? state.playerBgMode : "A";
+      applyPlayerBgUi(playerBgMode);
+    }
+
+    // Sync current Finisher configs for the BG editor
+    if (state.playerFinisherConfigs && state.playerFinisherConfigs.C) {
+      _bgEditorLatestCfgC = state.playerFinisherConfigs.C;
+      if (bgEditorOpen && !_bgEditorIsDirty()) bgEditorSetFromCfg(_bgEditorLatestCfgC);
+    }
+const playersTotal = state.players?.length ?? 0;
     const isGameOver = !!state.gameOver;
 
     if (isGameOver) {
@@ -542,6 +883,8 @@ let resetArmed = false;
     nextBtn.disabled = isGameOver || !(state.phase === "revealed");
     devFillBtn.disabled = isGameOver || !(state.phase === "collecting");
 
+    // (no player reveal toggle)
+
     // Make reset the obvious action when the game has ended.
     resetBtn?.classList.toggle("resetPulse", isGameOver);
 
@@ -552,6 +895,8 @@ let resetArmed = false;
 
   // Ask the server for the latest state now that listeners are ready.
   socket.emit("host_hello");
+  // Now that the server marked this socket as host, broadcast the chosen player BG mode.
+  commitPlayerBgMode(playerBgMode);
 
 
   socket.on("kicked", () => {});

@@ -54,56 +54,389 @@ body::after{
   background: linear-gradient(to bottom, rgba(11,13,18,0) 0%, rgba(11,13,18,0) 72%, rgba(11,13,18,0.65) 100%);
 }
 
-/* === Player background FX variants (Chrome-friendly) === */
+/* === Player background (original) === */
 
-/* Player-only: body without host/info classes
-   Goals: no visible banding without ugly noise, and smooth animation on Chrome (composited). */
+/* Player page: stronger soft background glows + a gentle "breathing" pulse.
+   (Host/Info keep the static glow.) */
 body:not(.hostPage):not(.infoPage)::before{
-  content:"";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: -2;
-
-  /* Baked + lightly dithered background to prevent gradient banding */
-  background: url("bg_player_dither.png") center/cover no-repeat;
-
-  /* Oversize slightly so no hard edges ever appear */
-  transform: translate3d(0,0,0) scale(1.08);
-  transform-origin: 50% 50%;
-  backface-visibility: hidden;
-  will-change: transform;
+  background:
+    radial-gradient(1700px 1150px at 50% 18%, rgba(255,255,255,0.115) 0%, rgba(255,255,255,0.050) 38%, rgba(255,255,255,0.018) 68%, rgba(0,0,0,0) 92%),
+    radial-gradient(1200px 900px at 15% 78%, rgba(255,255,255,0.060) 0%, rgba(0,0,0,0) 72%),
+    radial-gradient(1200px 900px at 85% 78%, rgba(255,255,255,0.060) 0%, rgba(0,0,0,0) 72%),
+    radial-gradient(1000px 700px at 50% 105%, rgba(255,255,255,0.030) 0%, rgba(0,0,0,0) 70%);
+  animation: bgBreath 6.5s ease-in-out infinite;
+  will-change: transform, opacity;
 }
 
-body:not(.hostPage):not(.infoPage)::after{
-  content:"";
+@keyframes bgBreath{
+  0%,100%{ transform: scale(1.00); opacity: 0.88; }
+  50%{ transform: scale(1.03); opacity: 1; }
+}
+
+/* === END Player background (original) === */
+
+/* === Player background (static image, based on v3.0.0.47 preset C) ===
+   - No animation
+   - Single high-res baked image for a "sharp" look
+*/
+html.playerStaticBg{
+  background: #0d1424 url("bg_player_static_c.png") center / cover no-repeat;
+}
+body.playerStaticBg{
+  background: #0d1424 url("bg_player_static_c.png") center / cover no-repeat;
+}
+body.playerStaticBg::before,
+body.playerStaticBg::after{
+  display:none !important;
+}
+/* === END Player background (static image) === */
+
+/* === Player background test (B): animated blobs (host-controlled) ===
+   - Experimental: may introduce banding in some browsers.
+   - Controlled from the host BG test buttons (A/B/C).
+*/
+@keyframes bgMoveBlobs {
+  100% { transform: translate3d(0, 0, 1px) rotate(360deg); }
+}
+
+.playerBgB{
   position: fixed;
   inset: 0;
+  width: 100vw;
+  height: 100vh;
+  top: 0;
+  left: 0;
+  background: #0c0f17;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.playerBgB span {
+  width: 50vmin;
+  height: 50vmin;
+  border-radius: 50vmin;
+  backface-visibility: hidden;
+  position: absolute;
+  animation: bgMoveBlobs;
+  animation-duration: 5s;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+/* NOTE: nth-child is 1-based. Mapped from your 0-10 list to 1-11. */
+.playerBgB span:nth-child(1) {
+  color: #1f2333;
+  top: 20%;
+  left: 47%;
+  animation-duration: 327s;
+  animation-delay: -182s;
+  transform-origin: -7vw 18vh;
+  box-shadow: -100vmin 0 13.018604517833134vmin currentColor;
+}
+.playerBgB span:nth-child(2) {
+  color: #151823;
+  top: 60%;
+  left: 4%;
+  animation-duration: 406s;
+  animation-delay: -240s;
+  transform-origin: -3vw 22vh;
+  box-shadow: 100vmin 0 12.762316256973838vmin currentColor;
+}
+.playerBgB span:nth-child(3) {
+  color: #151823;
+  top: 35%;
+  left: 52%;
+  animation-duration: 395s;
+  animation-delay: -278s;
+  transform-origin: 15vw 8vh;
+  box-shadow: -100vmin 0 13.10218522027612vmin currentColor;
+}
+.playerBgB span:nth-child(4) {
+  color: #1f2333;
+  top: 61%;
+  left: 60%;
+  animation-duration: 365s;
+  animation-delay: -402s;
+  transform-origin: 6vw -12vh;
+  box-shadow: -100vmin 0 13.129990102642967vmin currentColor;
+}
+.playerBgB span:nth-child(5) {
+  color: #151823;
+  top: 21%;
+  left: 43%;
+  animation-duration: 80s;
+  animation-delay: -189s;
+  transform-origin: 4vw -3vh;
+  box-shadow: -100vmin 0 12.970115741215873vmin currentColor;
+}
+.playerBgB span:nth-child(6) {
+  color: #1f2333;
+  top: 19%;
+  left: 50%;
+  animation-duration: 309s;
+  animation-delay: -334s;
+  transform-origin: -2vw -16vh;
+  box-shadow: 100vmin 0 12.895642837460437vmin currentColor;
+}
+.playerBgB span:nth-child(7) {
+  color: #151823;
+  top: 65%;
+  left: 95%;
+  animation-duration: 185s;
+  animation-delay: -298s;
+  transform-origin: 21vw 21vh;
+  box-shadow: -100vmin 0 13.043346555256644vmin currentColor;
+}
+.playerBgB span:nth-child(8) {
+  color: #1f2333;
+  top: 7%;
+  left: 2%;
+  animation-duration: 360s;
+  animation-delay: -255s;
+  transform-origin: -6vw -22vh;
+  box-shadow: -100vmin 0 13.180322529513408vmin currentColor;
+}
+.playerBgB span:nth-child(9) {
+  color: #151823;
+  top: 21%;
+  left: 67%;
+  animation-duration: 353s;
+  animation-delay: -24s;
+  transform-origin: 23vw -3vh;
+  box-shadow: 100vmin 0 12.529782245365437vmin currentColor;
+}
+.playerBgB span:nth-child(10) {
+  color: #1f2333;
+  top: 64%;
+  left: 46%;
+  animation-duration: 293s;
+  animation-delay: -397s;
+  transform-origin: -19vw 23vh;
+  box-shadow: -100vmin 0 13.003822493961914vmin currentColor;
+}
+.playerBgB span:nth-child(11) {
+  color: #1f2333;
+  top: 67%;
+  left: 45%;
+  animation-duration: 302s;
+  animation-delay: -390s;
+  transform-origin: -19vw 8vh;
+  box-shadow: -100vmin 0 12.500936929610136vmin currentColor;
+}
+
+/* === Player background test (C): FinisherHeader particles (host-controlled) === */
+.playerBgC{
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  background: #151823;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+.playerBgC canvas{
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* === END Player background test (B) === */
+
+
+/* v3.0.0.54 static bg patch: prevent any top "seam" from dynamic viewport/safe-area */
+html.playerStaticBg, body.playerStaticBg{
+  min-height: 100%;
+}
+
+/* === Host: background test (A/B) ===
+   A = current static image background (bg_player_static_c.png)
+   B = animated blobs (your snippet)
+*/
+html.hostBgModeA,
+body.hostBgModeA{
+  background: #0d1424 url("bg_player_static_c.png") center / cover no-repeat;
+}
+body.hostBgModeA::before,
+body.hostBgModeA::after{
+  display:none !important;
+}
+
+html.hostBgModeB{ background:#0c0f17; }
+body.hostBgModeB{
+  background: transparent;
+}
+body.hostBgModeB::before,
+body.hostBgModeB::after{
+  display:none !important;
+}
+
+/* Animated blob background (B) */
+@keyframes move {
+  100% { transform: translate3d(0, 0, 1px) rotate(360deg); }
+}
+.hostBgB{
+  position: fixed;
+  width: 100vw;
+  height: 100vh;
+  top: 0;
+  left: 0;
+  background: #0c0f17;
+  overflow: hidden;
   pointer-events: none;
   z-index: -1;
-
-  /* A few soft glows on top (cheap) + vignette */
-  background:
-    radial-gradient(1100px 900px at 16% 28%, rgba(200,225,255,0.11) 0%, rgba(0,0,0,0) 72%),
-    radial-gradient(1200px 950px at 84% 22%, rgba(200,225,255,0.11) 0%, rgba(0,0,0,0) 74%),
-    radial-gradient(1400px 1050px at 50% 92%, rgba(200,225,255,0.08) 0%, rgba(0,0,0,0) 78%),
-    radial-gradient(120% 100% at 50% 30%, rgba(11,13,18,0.00) 0%, rgba(11,13,18,0.00) 55%, rgba(11,13,18,0.58) 100%),
-    linear-gradient(to bottom, rgba(11,13,18,0) 0%, rgba(11,13,18,0) 72%, rgba(11,13,18,0.70) 100%);
-
-  opacity: 0.56;
-  transform: translate3d(0,0,0);
-  transform-origin: 50% 50%;
+}
+.hostBgB span {
+  width: 50vmin;
+  height: 50vmin;
+  border-radius: 50vmin;
   backface-visibility: hidden;
-  will-change: opacity, transform;
-  animation: playerBgPulse 10s ease-in-out infinite;
+  position: absolute;
+  animation: move;
+  animation-duration: 5s;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
 }
 
-@keyframes playerBgPulse {
-  0%,100%{ opacity:0.48; transform: translate3d(0,0,0) scale(1.00); }
-  50%{ opacity:0.60; transform: translate3d(0,0,0) scale(1.018); }
+/* NOTE: nth-child is 1-based. Mapped from your 0-10 list to 1-11. */
+.hostBgB span:nth-child(1) {
+  color: #1f2333;
+  top: 20%;
+  left: 47%;
+  animation-duration: 327s;
+  animation-delay: -182s;
+  transform-origin: -7vw 18vh;
+  box-shadow: -100vmin 0 13.018604517833134vmin currentColor;
+}
+.hostBgB span:nth-child(2) {
+  color: #151823;
+  top: 60%;
+  left: 4%;
+  animation-duration: 406s;
+  animation-delay: -240s;
+  transform-origin: -3vw 22vh;
+  box-shadow: 100vmin 0 12.762316256973838vmin currentColor;
+}
+.hostBgB span:nth-child(3) {
+  color: #151823;
+  top: 35%;
+  left: 52%;
+  animation-duration: 395s;
+  animation-delay: -278s;
+  transform-origin: 15vw 8vh;
+  box-shadow: -100vmin 0 13.10218522027612vmin currentColor;
+}
+.hostBgB span:nth-child(4) {
+  color: #1f2333;
+  top: 61%;
+  left: 60%;
+  animation-duration: 365s;
+  animation-delay: -402s;
+  transform-origin: 6vw -12vh;
+  box-shadow: -100vmin 0 13.129990102642967vmin currentColor;
+}
+.hostBgB span:nth-child(5) {
+  color: #151823;
+  top: 21%;
+  left: 43%;
+  animation-duration: 80s;
+  animation-delay: -189s;
+  transform-origin: 4vw -3vh;
+  box-shadow: -100vmin 0 12.970115741215873vmin currentColor;
+}
+.hostBgB span:nth-child(6) {
+  color: #1f2333;
+  top: 19%;
+  left: 50%;
+  animation-duration: 309s;
+  animation-delay: -334s;
+  transform-origin: -2vw -16vh;
+  box-shadow: 100vmin 0 12.895642837460437vmin currentColor;
+}
+.hostBgB span:nth-child(7) {
+  color: #151823;
+  top: 65%;
+  left: 95%;
+  animation-duration: 185s;
+  animation-delay: -298s;
+  transform-origin: 21vw 21vh;
+  box-shadow: -100vmin 0 13.043346555256644vmin currentColor;
+}
+.hostBgB span:nth-child(8) {
+  color: #1f2333;
+  top: 7%;
+  left: 2%;
+  animation-duration: 360s;
+  animation-delay: -255s;
+  transform-origin: -6vw -22vh;
+  box-shadow: -100vmin 0 13.180322529513408vmin currentColor;
+}
+.hostBgB span:nth-child(9) {
+  color: #151823;
+  top: 21%;
+  left: 67%;
+  animation-duration: 353s;
+  animation-delay: -24s;
+  transform-origin: 23vw -3vh;
+  box-shadow: 100vmin 0 12.529782245365437vmin currentColor;
+}
+.hostBgB span:nth-child(10) {
+  color: #1f2333;
+  top: 64%;
+  left: 46%;
+  animation-duration: 293s;
+  animation-delay: -397s;
+  transform-origin: -19vw 23vh;
+  box-shadow: -100vmin 0 13.003822493961914vmin currentColor;
+}
+.hostBgB span:nth-child(11) {
+  color: #1f2333;
+  top: 67%;
+  left: 45%;
+  animation-duration: 302s;
+  animation-delay: -390s;
+  transform-origin: -19vw 8vh;
+  box-shadow: -100vmin 0 12.500936929610136vmin currentColor;
 }
 
-/* END Player background FX variants */
+/* Host UI: small A/B toggle panel (lives next to the debug copy button) */
+.bgTestPanel{
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(10,10,10,.58);
+  padding: 10px 10px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.bgTestTitle{
+  font-size: 11px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.70);
+}
+.bgTestBtns{ display:flex; gap:8px; }
+.bgTestBtn{
+  flex:1;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(0,0,0,.20);
+  color: rgba(255,255,255,.86);
+  padding: 10px 12px;
+  font-size: 12px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.bgTestBtn:hover{ background: rgba(0,0,0,.34); }
+.bgTestBtn.active{
+  border-color: rgba(255,255,255,.28);
+  box-shadow: 0 0 18px rgba(255,255,255,.10);
+  background: rgba(0,0,0,.46);
+}
+/* === END Host background test === */
+
+
 .hidden{display:none !important}
 
 /* When a tab is in the background, browsers throttle animations/timers.
@@ -115,7 +448,9 @@ body.noAnim .scorePanel,
 body.noAnim .scorePanel *,
 body.noAnim .tile,
 body.noAnim .mathRow,
-body.noAnim .scoreNum{
+body.noAnim .scoreNum,
+body.noAnim .playerRevealOverlay,
+body.noAnim .playerRevealOverlay *{
   transition: none !important;
   animation: none !important;
 }
@@ -128,6 +463,8 @@ body.noAnim:not(.hostPage):not(.infoPage)::after{ animation: none !important; }
   align-items:center;
   justify-content:center;
   padding:18px;
+  position:relative;
+  z-index:1;
 }
 
 
@@ -767,7 +1104,7 @@ body.survivedTheme{
 
 /* Host access lock: keep host screen empty (background only) until code is entered */
 .hostPage.hostLocked .hostWrap,
-.hostPage.hostLocked #debugFab{
+.hostPage.hostLocked #settingsFab{
   display:none !important;
 }
 
@@ -799,6 +1136,24 @@ body.survivedTheme{
 }
 .hostHint{ font-size:12px; color: rgba(255,255,255,0.55); }
 .hostBtns{ display:flex; gap:6px; flex-wrap:wrap; }
+
+/* Host toggle switch */
+.hostToggle{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-left:10px;
+  padding:8px 10px;
+  border:1px solid rgba(255,255,255,0.08);
+  background: rgba(0,0,0,0.25);
+  color: rgba(255,255,255,0.72);
+  font-size:12px;
+  letter-spacing:0.08em;
+  text-transform:uppercase;
+  user-select:none;
+}
+.hostToggle input{ width:18px; height:18px; accent-color: rgba(255,255,255,0.85); }
+.hostToggle span{ white-space:nowrap; }
 
 .hostTiles{
   display:flex;
@@ -900,6 +1255,55 @@ body.survivedTheme{
   transition: opacity 1800ms ease, box-shadow 1400ms ease;
 }
 .infoPage .infoStage.visible{ opacity:1; }
+
+/* Player-side info reveal overlay (same scene styling as info page, but mountable on player) */
+.playerRevealOverlay{
+  position:fixed;
+  inset:0;
+  z-index:9998;
+  pointer-events:auto; /* block taps during reveal */
+}
+.playerRevealOverlay.hidden{ display:none; }
+.playerRevealBlackout{
+  position:absolute;
+  inset:0;
+  background:#000;
+  opacity:0;
+  transition: opacity 420ms ease;
+}
+.playerRevealOverlay.black .playerRevealBlackout{ opacity:1; }
+.playerRevealStage{
+  position:absolute;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:20px;
+  opacity:0;
+  /* Match the info screen stage fade timing */
+  transition: opacity 1800ms ease, box-shadow 1400ms ease;
+}
+.playerRevealOverlay.showStage .playerRevealStage{ opacity:1; }
+
+/* Ensure the player-side reveal looks IDENTICAL to the info screen (copy of .infoPage tweaks) */
+.playerRevealOverlay .mathLabel{
+  font-size: clamp(13px, 1.8vw, 18px);
+  letter-spacing: 0.10em;
+}
+.playerRevealOverlay .mathValue{
+  font-size: clamp(22px, 3.4vw, 40px);
+}
+.playerRevealOverlay .infoScoresRow .scoreNum{
+  font-weight: 400;
+}
+
+/* Round rule intro inside the player reveal overlay (match info screen) */
+.playerRevealOverlay .infoRoundRules{
+  position:fixed;
+  inset:0;
+  transition: opacity 1200ms ease;
+}
+
 
 .infoFrame{
   width:min(1800px, 98vw);
@@ -1223,6 +1627,25 @@ body.survivedTheme{
   opacity: 1 !important;
 }
 
+/* Phone-friendly layout for the big reveal scene */
+@media (max-width: 600px){
+  .infoFrame{ height: 96vh; gap: 14px; }
+  .infoCell{ width: clamp(140px, 42vw, 240px); }
+  .infoName{ font-size: 18px; }
+  .infoGuessTile{ padding: 14px 10px; }
+  .infoGuessTile .guessNum{ font-size: 52px; }
+
+  .infoMathRow{ --mathGap: 190px; }
+  .bigMath{ width: clamp(160px, 44vw, 260px); padding: 12px 10px; }
+  .bigMathOp{ font-size: 28px; }
+  .bigMathAvg, .bigMathTarget{ font-size: 18px; }
+
+  /* Allow wrap without clipping */
+  .infoNamesRow,
+  .infoScoresRow,
+  .infoDeltasRow{ height: auto; min-height: 44px; }
+}
+
 /* s3b: target verschijnt rechts */
 .infoScene.s3b #infoTargetBox{
   opacity:1;
@@ -1291,6 +1714,31 @@ body.survivedTheme{
 }
 
 
+
+/* Settings button (host) */
+.settingsFab{
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+.settingsPanel{
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(10,10,10,.58);
+  padding: 10px 10px;
+  display:flex;
+  flex-direction:column;
+  gap: 10px;
+  min-width: 190px;
+}
+.settingsPanelBtn{
+  width: 100%;
+}
+
 /* Debug button (host) */
 
 .debugFab{
@@ -1349,3 +1797,114 @@ body.survivedTheme{
 #playView .scoreNum.live{ transform:none; }
 #playView .scoreNum.out{ transform:none; }
 #playView .scoreNum.in{ transform:none; }
+
+
+/* === BG editor (host) === */
+.bgEditorOpenBtn{
+  margin-top:8px;
+  width:100%;
+  padding:8px 10px;
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,.14);
+  background: rgba(10,12,18,.55);
+  color:#fff;
+  cursor:pointer;
+  font-weight:600;
+}
+.bgEditorOpenBtn:hover{ background: rgba(10,12,18,.68); }
+
+.bgEditorModal{
+  position:fixed;
+  inset:0;
+  z-index:9999;
+  background: rgba(0,0,0,.55);
+  display:flex;
+  align-items:flex-end;
+  justify-content:center;
+  padding:14px;
+}
+.bgEditorCard{
+  width:min(1100px, 100%);
+  max-height: calc(100vh - 28px);
+  overflow:auto;
+  border-radius:18px;
+  border:1px solid rgba(255,255,255,.12);
+  background: rgba(12,15,23,.92);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 18px 60px rgba(0,0,0,.55);
+  padding:14px;
+}
+.bgEditorTop{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:10px;
+}
+.bgEditorTitle{ font-size:16px; font-weight:800; letter-spacing:.2px; }
+.bgEditorSub{ opacity:.7; font-size:12px; margin-top:2px; }
+.bgEditorTopBtns{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.btn.sm{ padding:7px 10px; font-size:12px; border-radius:10px; }
+
+.bgEditorGrid{
+  display:grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap:12px;
+}
+@media (max-width: 980px){
+  .bgEditorGrid{ grid-template-columns: 1fr; }
+}
+.bgEditorCol{
+  border-radius:16px;
+  border:1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.04);
+  padding:12px;
+}
+.bgEditorH{
+  font-weight:800;
+  opacity:.9;
+  margin-bottom:10px;
+}
+.bgCtl{
+  display:block;
+  margin:10px 0;
+}
+.bgCtlRow{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  font-size:12px;
+  margin-bottom:6px;
+}
+.bgVal{
+  opacity:.75;
+  font-variant-numeric: tabular-nums;
+}
+.bgTwo{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap:10px;
+}
+.bgBtnRow{ display:flex; gap:8px; flex-wrap:wrap; }
+.bgMiniBtn{
+  padding:7px 10px;
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,.14);
+  background: rgba(8,10,14,.55);
+  color:#fff;
+  cursor:pointer;
+  font-weight:700;
+}
+.bgMiniBtn:hover{ background: rgba(8,10,14,.70); }
+.bgMiniBtn.active{
+  border-color: rgba(255,255,255,.45);
+  background: rgba(255,255,255,.12);
+}
+.bgEditorHint{
+  margin-top:12px;
+  font-size:12px;
+  opacity:.75;
+  line-height:1.35;
+}
+
