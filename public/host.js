@@ -18,13 +18,23 @@ document.addEventListener("DOMContentLoaded", () => {
   document.body.classList.remove("hostLocked");
   const socket = io();
 
+  function requestFreshHostState(){
+    socket.emit("host_hello");
+  }
+
+  socket.on("connect", requestFreshHostState);
+  socket.io.on("reconnect", requestFreshHostState);
+  window.addEventListener("pageshow", requestFreshHostState);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) requestFreshHostState();
+  });
+
   const hostHint = document.getElementById("hostHint");
   const startBtn = document.getElementById("startBtn");
   const revealBtn = document.getElementById("revealBtn");
   const nextBtn = document.getElementById("nextBtn");
   const devFillBtn = document.getElementById("devFillBtn");
   const resetBtn = document.getElementById("resetBtn");
-  const playerRevealToggle = document.getElementById("playerRevealToggle");
 
   // --- Player background test (A/B/C/D) ---
 // These buttons live on the HOST page, but they switch the BACKGROUND on all PLAYER screens.
@@ -520,13 +530,6 @@ let resetArmed = false;
   revealBtn?.addEventListener("click", () => socket.emit("host_reveal"));
   nextBtn?.addEventListener("click", () => socket.emit("host_next"));
 
-  // Toggle: play the info-style reveal animation on player screens (when not using the info screen).
-  let _toggleSyncing = false;
-  playerRevealToggle?.addEventListener("change", () => {
-    if (_toggleSyncing) return;
-    socket.emit("host_player_reveal_mode", { on: !!playerRevealToggle.checked });
-  });
-
   devFillBtn?.addEventListener("click", () => socket.emit("host_devfill"));
 
   resetBtn?.addEventListener("click", () => {
@@ -888,12 +891,6 @@ const playersTotal = state.players?.length ?? 0;
     nextBtn.disabled = isGameOver || !(state.phase === "revealed");
     devFillBtn.disabled = isGameOver || !(state.phase === "collecting");
 
-    if (playerRevealToggle) {
-      _toggleSyncing = true;
-      playerRevealToggle.checked = !!state.playerRevealMode;
-      _toggleSyncing = false;
-    }
-
     // Make reset the obvious action when the game has ended.
     resetBtn?.classList.toggle("resetPulse", isGameOver);
 
@@ -903,7 +900,7 @@ const playersTotal = state.players?.length ?? 0;
   });
 
   // Ask the server for the latest state now that listeners are ready.
-  socket.emit("host_hello");
+  requestFreshHostState();
   // Now that the server marked this socket as host, broadcast the chosen player BG mode.
   commitPlayerBgMode(playerBgMode);
 
