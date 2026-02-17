@@ -1664,53 +1664,6 @@ body.survivedTheme{
     padding: 12px 10px;
     gap:12px;
   }
-  .infoNamesRow,
-  .infoGuessesRow,
-  .infoScoresRow,
-  .infoDeltasRow{ gap:10px; }
-  .infoCell{ width: clamp(124px, 30vw, 240px); }
-  .infoGuessTile{ padding:12px 8px; }
-  .infoGuessTile .guessNum{ font-size: clamp(38px, 11.5vw, 58px); }
-  .infoName{ font-size: clamp(15px, 4.3vw, 22px); }
-  .infoScore .scoreNum,
-  .infoDelta .deltaNum{ font-size: clamp(15px, 4.5vw, 22px); }
-
-  .infoMathRow{ --mathGap: clamp(72px, 19vw, 150px); }
-  .bigMath{ width: clamp(120px, 33vw, 220px); padding:10px 8px; }
-  .bigMathOp{
-    font-size: clamp(20px, 5.4vw, 30px);
-    letter-spacing: 0.02em;
-    white-space: nowrap;
-  }
-
-  .infoScene.s2 .infoMathRow{ height:102px; transform: translateY(-14px); }
-  .infoScene.s3a #infoAvgBox{ transform: translate(calc(-50% - var(--mathGap, 120px)), -50%); }
-  .infoScene.s3b #infoTargetBox{ transform: translate(calc(-50% + var(--mathGap, 120px)), -50%); }
-  .infoScene.s4 .infoMathRow{ transform: translateY(6px); }
-  .infoScene.s4 .infoGuessesRow{ transform: translateY(-2px); }
-}
-
-@media (max-width: 480px){
-  .infoFrame{ padding: 10px 8px; gap:8px; }
-  .infoScene{ gap:8px; }
-
-  .infoNamesRow,
-  .infoScoresRow,
-  .infoDeltasRow{ height: 36px; }
-
-  .infoCell{ width: calc(50vw - 24px); max-width: 160px; }
-  .infoGuessTile{ padding:10px 6px; }
-  .infoGuessTile .guessNum{ font-size: clamp(34px, 11.5vw, 50px); }
-  .infoName{ font-size: clamp(14px, 5.4vw, 19px); }
-
-  .infoMathRow{ --mathGap: clamp(42px, 11vw, 62px); }
-  .bigMath{ width: calc(50vw - 24px); max-width: 160px; }
-  .bigMathOp{ font-size: clamp(16px, 6vw, 20px); letter-spacing: 0.01em; }
-
-  .infoScene.s2 .infoMathRow{ height:80px; margin-top:2px; transform: translateY(-8px); }
-  .infoScene.s3a #infoAvgBox{ transform: translate(calc(-50% - var(--mathGap, 52px)), -50%); }
-  .infoScene.s3b #infoTargetBox{ transform: translate(calc(-50% + var(--mathGap, 52px)), -50%); }
-  .infoScene.s4 .infoMathRow{ transform: translateY(0); }
 }
 
 /* Ensure old infoContent doesn't affect layout (legacy) */
