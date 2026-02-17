@@ -34,7 +34,7 @@ const game = {
 
   // When true, players run the info-style reveal animation on their own screen
   // (useful when playing without the info screen).
-  playerRevealMode: false,
+  playerRevealMode: true,
 
   // Player background mode, controlled from the host
   // A = static image, B = animated blobs, C/D = FinisherHeader particles
@@ -441,11 +441,8 @@ socket.on("host_player_bg_mode", ({ mode } = {}) => {
 
 
 
-// Info screen signals when its reveal animation is finished.
+// Info screen can also signal reveal completion (when the info tab is open).
 socket.on("info_reveal_done", ({ round }) => {
-  // If the host enabled "player reveal mode", we ignore info completion signals
-  // so the player-driven reveal stays in control.
-  if (game.playerRevealMode) return;
   const r = Number(round);
   if (!Number.isFinite(r)) return;
   if (game.phase !== "revealed") return;
@@ -453,18 +450,10 @@ socket.on("info_reveal_done", ({ round }) => {
   markRevealReady(r);
 });
 
-// Host toggle: let players run the info-style reveal when the info screen isn't used.
-socket.on("host_player_reveal_mode", ({ on }) => {
-  if (!socket.data.isHost) return;
-  game.playerRevealMode = !!on;
-  broadcastState();
-});
-
 // Optional: players can signal they finished the local reveal animation.
 // This lets the server unlock early (instead of waiting only on a timer) while
 // players that are still animating can simply ignore the unlock until done.
 socket.on("player_reveal_done", ({ round }) => {
-  if (!game.playerRevealMode) return;
   const r = Number(round);
   if (!Number.isFinite(r)) return;
   if (game.phase !== "revealed") return;
@@ -608,10 +597,8 @@ socket.on("join", ({ name, playerKey }) => {
     game.gameOver = aliveIds().length <= 1;
 
     clearRevealReady();
-    // Unlock timing:
-    // - Normal mode: wait for info screen completion (fallback timer in case info isn't open).
-    // - Player reveal mode: players run the animation locally, so we unlock after that duration.
-    const waitMs = game.playerRevealMode ? PLAYER_REVEAL_TOTAL_MS : INFO_ANIM_TOTAL_MS;
+    // Unlock timing fallback: if no completion signal arrives, unlock after player reveal duration.
+    const waitMs = PLAYER_REVEAL_TOTAL_MS;
     revealReadyTimer = setTimeout(() => {
       if (game.phase === "revealed" && game.revealReadyRound !== game.round) {
         markRevealReady(game.round);
