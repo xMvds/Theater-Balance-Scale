@@ -7,6 +7,17 @@ function escapeHtml(str){
 
 const socket = io();
 
+function requestFreshPlayerState() {
+  socket.emit("player_hello", { playerKey: getPlayerKey() });
+}
+
+socket.on("connect", requestFreshPlayerState);
+socket.io.on("reconnect", requestFreshPlayerState);
+
+window.addEventListener("pageshow", () => {
+  requestFreshPlayerState();
+});
+
 // Player background: A/B/C/D test controlled from the host (HOST buttons switch PLAYER bg)
 const IS_PLAYER_PAGE = !document.body.classList.contains("hostPage") && !document.body.classList.contains("infoPage");
 const playerBgBEl = document.getElementById("playerBgB");
@@ -176,7 +187,7 @@ const playerMathRow = document.getElementById("playerMathRow");
 const deadNoise = document.getElementById("deadNoise");
 const survivedFx = document.getElementById("survivedFx");
 
-// Optional: Player-side info reveal overlay (when host enables playerRevealMode)
+// Optional: Player-side info reveal overlay (always used for reveal animation)
 const playerRevealOverlay = document.getElementById("playerRevealOverlay");
 const playerRevealBlackout = document.getElementById("playerRevealBlackout");
 const playerRevealStage = document.getElementById("playerRevealStage");
@@ -196,7 +207,7 @@ let playerRevealPlayedRound = null;
 let playerRevealTimers = [];
 let overlayPrevScores = new Map();
 
-// Round-rule intro overlay (only when host enables playerRevealMode)
+// Round-rule intro overlay
 let playerRuleIntroInProgress = false;
 let playerRuleIntroPlayedRound = null;
 let playerRuleIntroTimers = [];
@@ -690,9 +701,6 @@ function startPlayerRuleIntro(state) {
     priDelayTimer = null;
   }
 
-  // We only show this overlay when player reveal mode is enabled.
-  if (!state.playerRevealMode) return;
-
   const lines = priComputeNewRuleLines(state);
   if (!lines.length) return;
 
@@ -711,7 +719,6 @@ function startPlayerRuleIntro(state) {
     priDelayTimer = null;
     if (!lastState) { stopPlayerRuleIntro(); return; }
     if (lastState.phase !== "collecting" || lastState.round !== priDelayRound) { stopPlayerRuleIntro(); return; }
-    if (!lastState.playerRevealMode) { stopPlayerRuleIntro(); return; }
 
     priHideRoundRulesOverlay();
     prShowOverlay();
@@ -898,33 +905,16 @@ function prSetBlack(on) {
   }
 }
 
-function prSnapToEnd(state) {
-  // instantly end the reveal and show the scoreboard (used for background tab / interruptions)
-  prClearTimers();
-  playerRevealInProgress = false;
-  playerRevealPlayedRound = state.round;
-  localRevealReadyRound = state.round;
-  prHideOverlay();
-
-  // open scoreboard instantly (hidden tabs should never replay animations)
-  renderScoreboard._suppressAnimRound = state.round;
-  renderScoreboard(state, { instant: true });
-}
-
 function startPlayerReveal(state) {
   if (!playerRevealOverlay || !playerRevealBlackout || !playerRevealStage || !infoScene) return;
   if (playerRevealInProgress) return;
   if (playerRevealPlayedRound === state.round) return;
 
-  // If the tab is hidden, don't try to animate — just snap.
-  if (document.hidden) {
-    prSnapToEnd(state);
-    return;
-  }
+  // If the tab is hidden, wait until it becomes visible and replay from the start.
+  if (document.hidden) return;
 
   prClearTimers();
   playerRevealInProgress = true;
-  playerRevealPlayedRound = state.round;
   localRevealReadyRound = null;
 
   // Make the player-side reveal feel identical to the info screen:
@@ -979,6 +969,7 @@ function startPlayerReveal(state) {
   prSetTimeout(() => {
     prHideOverlay();
     playerRevealInProgress = false;
+    playerRevealPlayedRound = state.round;
     try{ playerRevealBlackout.style.transitionDuration = "420ms"; }catch(e){}
   }, endAt + 620 + OUT_MS + 180);
 }
@@ -1356,11 +1347,8 @@ socket.on("state", (state) => {
         startGridCascade();
       }
 
-      // When host enabled "player reveal mode" (no info screen), also show new rule announcements
-      // as a full-screen overlay on the player (match the info screen style).
-      if (state.playerRevealMode) {
-        startPlayerRuleIntro(state);
-      }
+      // Show new round-rule announcements as a full-screen overlay on the player.
+      startPlayerRuleIntro(state);
     }
 
     // IMPORTANT: also react to dev-fill (or late server-side submit) DURING the round.
@@ -1397,18 +1385,15 @@ socket.on("state", (state) => {
     }
     pendingRevealState = state;
 
-    const ready = (state.revealReadyRound === state.round) || (localRevealReadyRound === state.round);
+    const revealDoneLocally = (playerRevealPlayedRound === state.round) && !playerRevealInProgress;
 
-    // If host enabled player reveal mode (no info screen), play the info-style reveal locally.
-    if (state.playerRevealMode && !ready) {
-      // Keep scoreboard closed while animating.
+    // Always play the full reveal animation on players once per revealed round,
+    // even if this tab is opened later during/after the host info timeline.
+    if (!revealDoneLocally) {
       closeScoreboardPanel();
       startPlayerReveal(state);
-    } else if (ready) {
-      // Normal behavior: only open after reveal is ready.
-      renderScoreboard(state, { instant: document.hidden });
     } else {
-      closeScoreboardPanel();
+      renderScoreboard(state, { instant: document.hidden });
     }
 }
 
@@ -1420,11 +1405,12 @@ socket.on("state", (state) => {
 // make sure the scoreboard panel catches up to the latest reveal state immediately.
 document.addEventListener("visibilitychange", () => {
   visEpoch++;
+  if (!document.hidden) requestFreshPlayerState();
   const s = pendingRevealState || lastState;
 
   if (document.hidden) {
     document.body.classList.add("noAnim");
-    // Cancel delayed timers that could fire on return.
+    // Cancel delayed timers that could fire while hidden.
     clearTimeout(renderScoreboard._tShow);
     clearTimeout(renderScoreboard._tShow2);
     clearTimeout(renderScoreboard._tHide);
@@ -1432,29 +1418,28 @@ document.addEventListener("visibilitychange", () => {
     clearTimeout(closeScoreboardPanel._tReset);
     clearScoreAnimTimers();
 
-    // Stop any player-side reveal overlay to avoid "catch-up" animations.
-    prClearTimers();
-
-    if (s && s.phase === "revealed" && playerRevealInProgress) {
-      prSnapToEnd(s);
-      return;
+    // Abort running reveal animation so it can replay from the start on return.
+    if (playerRevealInProgress) {
+      prClearTimers();
+      playerRevealInProgress = false;
+      playerRevealPlayedRound = null;
+      localRevealReadyRound = null;
+      prHideOverlay();
     }
 
-    const ready = !!(s && s.phase === "revealed" && ((s.revealReadyRound === s.round) || (localRevealReadyRound === s.round)));
-    if (!ready) {
-      closeScoreboardPanel();
-      return;
-    }
-
-    renderScoreboard._suppressAnimRound = (s.round || 0);
-    renderScoreboard(s, { instant: true });
+    closeScoreboardPanel();
     return;
   }
 
-  // Visible again: keep noAnim while catching up so nothing "replays".
+  // Visible again: request fresh state and replay reveal (if needed) without stale transitions.
   document.body.classList.add("noAnim");
-  if (s && s.phase === "revealed" && ((s.revealReadyRound === s.round) || (localRevealReadyRound === s.round))) {
-    renderScoreboard(s, { instant: true });
+  if (s && s.phase === "revealed") {
+    if (playerRevealPlayedRound === s.round && !playerRevealInProgress) {
+      renderScoreboard(s, { instant: true });
+    } else {
+      closeScoreboardPanel();
+      startPlayerReveal(s);
+    }
   } else {
     closeScoreboardPanel();
   }

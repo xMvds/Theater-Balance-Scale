@@ -34,7 +34,7 @@ const game = {
 
   // When true, players run the info-style reveal animation on their own screen
   // (useful when playing without the info screen).
-  playerRevealMode: false,
+  playerRevealMode: true,
 
   // Player background mode, controlled from the host
   // A = static image, B = animated blobs, C/D = FinisherHeader particles
@@ -344,6 +344,27 @@ function kickOne(socketId) {
 }
 
 io.on("connection", (socket) => {
+  socket.on("player_hello", ({ playerKey } = {}) => {
+    const started = (game.phase !== "lobby") || (game.round > 0);
+    const key = String(playerKey || "").trim();
+
+    // Mobile browsers can reconnect sockets after being in the background.
+    // Rebind by player key so this socket continues to receive/submit as expected.
+    if (started && key) {
+      const existingSid = game.byKey[key];
+      const p = game.players[existingSid];
+      if (p) {
+        if (existingSid && existingSid !== socket.id) delete game.players[existingSid];
+        p.socketId = socket.id;
+        p.connected = true;
+        game.players[socket.id] = p;
+        game.byKey[key] = socket.id;
+      }
+    }
+
+    broadcastState();
+  });
+
   socket.on("host_hello", () => {
     socket.data.isHost = true;
 	    // Do NOT auto-kick players when the host opens/refreshes the host page.
@@ -420,11 +441,8 @@ socket.on("host_player_bg_mode", ({ mode } = {}) => {
 
 
 
-// Info screen signals when its reveal animation is finished.
+// Info screen can also signal reveal completion (when the info tab is open).
 socket.on("info_reveal_done", ({ round }) => {
-  // If the host enabled "player reveal mode", we ignore info completion signals
-  // so the player-driven reveal stays in control.
-  if (game.playerRevealMode) return;
   const r = Number(round);
   if (!Number.isFinite(r)) return;
   if (game.phase !== "revealed") return;
@@ -432,18 +450,10 @@ socket.on("info_reveal_done", ({ round }) => {
   markRevealReady(r);
 });
 
-// Host toggle: let players run the info-style reveal when the info screen isn't used.
-socket.on("host_player_reveal_mode", ({ on }) => {
-  if (!socket.data.isHost) return;
-  game.playerRevealMode = !!on;
-  broadcastState();
-});
-
 // Optional: players can signal they finished the local reveal animation.
 // This lets the server unlock early (instead of waiting only on a timer) while
 // players that are still animating can simply ignore the unlock until done.
 socket.on("player_reveal_done", ({ round }) => {
-  if (!game.playerRevealMode) return;
   const r = Number(round);
   if (!Number.isFinite(r)) return;
   if (game.phase !== "revealed") return;
@@ -587,10 +597,8 @@ socket.on("join", ({ name, playerKey }) => {
     game.gameOver = aliveIds().length <= 1;
 
     clearRevealReady();
-    // Unlock timing:
-    // - Normal mode: wait for info screen completion (fallback timer in case info isn't open).
-    // - Player reveal mode: players run the animation locally, so we unlock after that duration.
-    const waitMs = game.playerRevealMode ? PLAYER_REVEAL_TOTAL_MS : INFO_ANIM_TOTAL_MS;
+    // Unlock timing fallback: if no completion signal arrives, unlock after player reveal duration.
+    const waitMs = PLAYER_REVEAL_TOTAL_MS;
     revealReadyTimer = setTimeout(() => {
       if (game.phase === "revealed" && game.revealReadyRound !== game.round) {
         markRevealReady(game.round);

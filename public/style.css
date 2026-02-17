@@ -1137,23 +1137,6 @@ body.survivedTheme{
 .hostHint{ font-size:12px; color: rgba(255,255,255,0.55); }
 .hostBtns{ display:flex; gap:6px; flex-wrap:wrap; }
 
-/* Host toggle switch */
-.hostToggle{
-  display:flex;
-  align-items:center;
-  gap:10px;
-  margin-left:10px;
-  padding:8px 10px;
-  border:1px solid rgba(255,255,255,0.08);
-  background: rgba(0,0,0,0.25);
-  color: rgba(255,255,255,0.72);
-  font-size:12px;
-  letter-spacing:0.08em;
-  text-transform:uppercase;
-  user-select:none;
-}
-.hostToggle input{ width:18px; height:18px; accent-color: rgba(255,255,255,0.85); }
-.hostToggle span{ white-space:nowrap; }
 
 .hostTiles{
   display:flex;
@@ -1672,6 +1655,84 @@ body.survivedTheme{
   align-items:center;
   justify-content:center;
   gap:18px;
+}
+
+@media (max-width: 820px){
+  .infoFrame{
+    width:min(100vw, 980px);
+    height:min(100vh, 900px);
+    padding: 10px 8px;
+    gap:10px;
+  }
+
+  .infoNamesRow,
+  .infoGuessesRow,
+  .infoScoresRow,
+  .infoDeltasRow{
+    display:grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap:8px;
+    width:min(96vw, 680px);
+    align-items:start;
+  }
+
+  .infoCell{ width:auto; min-width:0; }
+  .infoName{
+    font-size: clamp(13px, 3.3vw, 18px);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .infoGuessTile{ padding:8px 6px; }
+  .infoGuessTile .guessNum{ font-size: clamp(30px, 7.2vw, 46px); }
+
+  .infoScore .scoreNum,
+  .infoDelta .deltaNum{ font-size: clamp(13px, 3.5vw, 18px); }
+
+  .infoMathRow{ --mathGap: clamp(52px, 12vw, 78px); }
+  .bigMath{ width: clamp(102px, 24vw, 150px); padding:8px 6px; }
+  .bigMathOp{
+    font-size: clamp(15px, 4.2vw, 22px);
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+  }
+
+  .infoScene.s2 .infoGuessesRow{ transform: translateY(-4px); }
+  .infoScene.s2 .infoMathRow{ height:88px; transform: translateY(-10px); }
+  .infoScene.s3a #infoAvgBox{ transform: translate(calc(-50% - var(--mathGap, 64px)), -50%); }
+  .infoScene.s3b #infoTargetBox{ transform: translate(calc(-50% + var(--mathGap, 64px)), -50%); }
+  .infoScene.s4 .infoMathRow{ transform: translateY(0); }
+  .infoScene.s4 .infoGuessesRow{ transform: translateY(0); }
+}
+
+@media (max-width: 480px){
+  .infoFrame{ padding: 8px 6px; gap:6px; }
+  .infoScene{ gap:6px; }
+
+  .infoNamesRow,
+  .infoGuessesRow,
+  .infoScoresRow,
+  .infoDeltasRow{
+    gap:6px;
+    width: min(98vw, 420px);
+  }
+
+  .infoNamesRow,
+  .infoScoresRow,
+  .infoDeltasRow{ height: 30px; }
+
+  .infoName{ font-size: clamp(12px, 3.4vw, 15px); }
+  .infoGuessTile{ padding:7px 4px; }
+  .infoGuessTile .guessNum{ font-size: clamp(26px, 8.2vw, 38px); }
+  .infoScore .scoreNum,
+  .infoDelta .deltaNum{ font-size: clamp(12px, 3.8vw, 16px); }
+
+  .infoMathRow{ --mathGap: clamp(36px, 9vw, 52px); }
+  .bigMath{ width: clamp(86px, 22vw, 126px); padding:7px 4px; }
+  .bigMathOp{ font-size: clamp(13px, 4.6vw, 17px); }
+
+  .infoScene.s2 .infoMathRow{ height:72px; margin-top:0; transform: translateY(-8px); }
 }
 
 /* Ensure old infoContent doesn't affect layout (legacy) */
