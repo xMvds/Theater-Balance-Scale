@@ -7,6 +7,17 @@ function escapeHtml(str){
 
 const socket = io();
 
+function requestFreshPlayerState() {
+  socket.emit("player_hello", { playerKey: getPlayerKey() });
+}
+
+socket.on("connect", requestFreshPlayerState);
+socket.io.on("reconnect", requestFreshPlayerState);
+
+window.addEventListener("pageshow", () => {
+  requestFreshPlayerState();
+});
+
 // Player background: A/B/C/D test controlled from the host (HOST buttons switch PLAYER bg)
 const IS_PLAYER_PAGE = !document.body.classList.contains("hostPage") && !document.body.classList.contains("infoPage");
 const playerBgBEl = document.getElementById("playerBgB");
@@ -1420,6 +1431,7 @@ socket.on("state", (state) => {
 // make sure the scoreboard panel catches up to the latest reveal state immediately.
 document.addEventListener("visibilitychange", () => {
   visEpoch++;
+  if (!document.hidden) requestFreshPlayerState();
   const s = pendingRevealState || lastState;
 
   if (document.hidden) {

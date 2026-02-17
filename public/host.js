@@ -18,6 +18,17 @@ document.addEventListener("DOMContentLoaded", () => {
   document.body.classList.remove("hostLocked");
   const socket = io();
 
+  function requestFreshHostState(){
+    socket.emit("host_hello");
+  }
+
+  socket.on("connect", requestFreshHostState);
+  socket.io.on("reconnect", requestFreshHostState);
+  window.addEventListener("pageshow", requestFreshHostState);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) requestFreshHostState();
+  });
+
   const hostHint = document.getElementById("hostHint");
   const startBtn = document.getElementById("startBtn");
   const revealBtn = document.getElementById("revealBtn");
@@ -903,7 +914,7 @@ const playersTotal = state.players?.length ?? 0;
   });
 
   // Ask the server for the latest state now that listeners are ready.
-  socket.emit("host_hello");
+  requestFreshHostState();
   // Now that the server marked this socket as host, broadcast the chosen player BG mode.
   commitPlayerBgMode(playerBgMode);
 
