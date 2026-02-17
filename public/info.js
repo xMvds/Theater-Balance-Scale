@@ -14,6 +14,17 @@
 
 const socket = io();
 
+function sendInfoHello() {
+  socket.emit("info_hello");
+}
+
+socket.on("connect", sendInfoHello);
+socket.io.on("reconnect", sendInfoHello);
+window.addEventListener("pageshow", sendInfoHello);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) sendInfoHello();
+});
+
 const blackout = document.getElementById("infoBlackout");
 const stage = document.getElementById("infoStage");
 

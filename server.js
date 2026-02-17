@@ -83,6 +83,7 @@ const INFO_ANIM_TOTAL_MS = 11000; // ms
 // Player-side reveal (black -> info animation -> black -> back) takes a bit longer.
 const PLAYER_REVEAL_TOTAL_MS = 12500; // ms
 let revealReadyTimer = null;
+const infoSockets = new Set();
 
 // Allow dev fill from player debug UI only when explicitly enabled.
 const DEBUG_DEVFILL = process.env.DEBUG_DEVFILL === "1";
@@ -194,6 +195,7 @@ function broadcastState() {
     players: playersList,
     lastRound: game.lastRound,
     revealReadyRound: game.revealReadyRound,
+    infoScreenOpen: infoSockets.size > 0,
     gameOver: game.gameOver,
   });
 }
@@ -344,6 +346,13 @@ function kickOne(socketId) {
 }
 
 io.on("connection", (socket) => {
+  socket.on("info_hello", () => {
+    const wasInfo = !!socket.data.isInfo;
+    socket.data.isInfo = true;
+    infoSockets.add(socket.id);
+    if (!wasInfo) broadcastState();
+  });
+
   socket.on("player_hello", ({ playerKey } = {}) => {
     const started = (game.phase !== "lobby") || (game.round > 0);
     const key = String(playerKey || "").trim();
@@ -667,6 +676,12 @@ socket.on("host_reset", () => {
   });
 
   socket.on("disconnect", () => {
+    const wasInfo = !!socket.data.isInfo;
+    if (wasInfo) {
+      infoSockets.delete(socket.id);
+      socket.data.isInfo = false;
+    }
+
     const p = game.players[socket.id];
     if (!p) {
       broadcastState();

@@ -146,6 +146,10 @@ let didCascadeThisGame = sessionStorage.getItem(SS_CASCADE_KEY) === "1";
 
 let currentCollectRound = null; // <-- belangrijk: reset UI alleen bij nieuwe ronde
 
+function isInfoScreenOpen(state) {
+  return !!(state && state.infoScreenOpen);
+}
+
 const joinView = document.getElementById("joinView");
 const playView = document.getElementById("playView");
 const nameInput = document.getElementById("nameInput");
@@ -691,11 +695,33 @@ function stopPlayerRuleIntro() {
   if (!playerRevealInProgress) prHideOverlay();
 }
 
+function finishPlayerRuleIntroHidden(state) {
+  if (!state || state.phase !== "collecting") return;
+
+  if (priDelayTimer) {
+    clearTimeout(priDelayTimer);
+    priDelayTimer = null;
+  }
+  priDelayRound = null;
+  priClearTimers();
+  playerRuleIntroInProgress = false;
+  queuedRuleIntroState = null;
+  playerRuleIntroPlayedRound = state.round;
+
+  priHideRoundRulesOverlay();
+  if (!playerRevealInProgress) prHideOverlay();
+}
+
 function startPlayerRuleIntro(state) {
   if (!playerRevealOverlay || !playerRevealBlackout || !playerRevealRoundRules) return;
   if (playerRevealInProgress) return; // don't interfere with the reveal timeline
   if (playerRuleIntroInProgress) return;
   if (playerRuleIntroPlayedRound === state.round) return;
+
+  if (isInfoScreenOpen(state)) {
+    finishPlayerRuleIntroHidden(state);
+    return;
+  }
 
   // Cancel any previous delayed show
   if (priDelayTimer) {
@@ -709,9 +735,10 @@ function startPlayerRuleIntro(state) {
     return;
   }
 
-  // If hidden, queue and replay on visibility/focus/pageshow.
+  // Hidden tabs are throttled heavily. Mark this round intro as handled
+  // so it does not replay in full when the user returns.
   if (document.hidden) {
-    queuedRuleIntroState = state;
+    finishPlayerRuleIntroHidden(state);
     return;
   }
 
@@ -939,14 +966,34 @@ function prSetBlack(on) {
   }
 }
 
+function finishPlayerRevealHidden(state) {
+  if (!state || state.phase !== "revealed") return;
+
+  prClearTimers();
+  playerRevealInProgress = false;
+  playerRevealPlayedRound = state.round;
+  queuedRevealState = null;
+  localRevealReadyRound = state.round;
+  renderScoreboard._suppressAnimRound = state.round;
+
+  document.body.classList.add("noAnim");
+  renderScoreboard(state, { instant: true });
+  prHideOverlay();
+
+  try {
+    socket.emit("player_reveal_done", { round: state.round });
+  } catch (e) {}
+}
+
 function startPlayerReveal(state) {
   if (!playerRevealOverlay || !playerRevealBlackout || !playerRevealStage || !infoScene) return;
   if (playerRevealInProgress) return;
   if (playerRevealPlayedRound === state.round) return;
 
-  // If the tab is hidden, wait until it becomes visible and replay from the start.
-  if (document.hidden) {
-    queuedRevealState = state;
+  // Hidden tabs and sessions where info screen is open should not play
+  // the full player reveal animation.
+  if (document.hidden || isInfoScreenOpen(state)) {
+    finishPlayerRevealHidden(state);
     return;
   }
 
@@ -1147,10 +1194,14 @@ function renderScoreboard(state, opts = {}) {
     delta.className = "tDelta" + ((deltaVal < 0) ? " bad" : "");
     delta.textContent = String(deltaVal);
 
+    const metaRow = document.createElement("div");
+    metaRow.className = "tMeta";
+    metaRow.appendChild(scoreWrap);
+    metaRow.appendChild(delta);
+
     tile.appendChild(name);
     tile.appendChild(box);
-    tile.appendChild(scoreWrap);
-    tile.appendChild(delta);
+    tile.appendChild(metaRow);
     tilesEl.appendChild(tile);
 
     // No stagger/slide for tiles on the player screen; tiles will simply fade in
@@ -1212,8 +1263,10 @@ function replayRevealIfNeeded(stateOverride = null) {
   const s = stateOverride || pendingRevealState || lastState;
   if (!s || s.phase !== "revealed") return false;
 
+  const instantReveal = document.hidden || document.body.classList.contains("noAnim") || isInfoScreenOpen(s);
+
   if (playerRevealPlayedRound === s.round && !playerRevealInProgress) {
-    renderScoreboard(s, { instant: document.hidden || document.body.classList.contains("noAnim") });
+    renderScoreboard(s, { instant: instantReveal });
   } else {
     queuedRevealState = s;
     closeScoreboardPanel();
@@ -1471,15 +1524,15 @@ socket.on("state", (state) => {
 
     const revealDoneLocally = (playerRevealPlayedRound === state.round) && !playerRevealInProgress;
 
-    // Always play the full reveal animation on players once per revealed round,
-    // even if this tab is opened later during/after the host info timeline.
+    // Play the full reveal once per round when visible.
+    // Hidden tabs are fast-forwarded to the final scoreboard state.
     if (!revealDoneLocally) {
       queuedRevealState = state;
       closeScoreboardPanel();
       startPlayerReveal(state);
     } else {
       queuedRevealState = null;
-      renderScoreboard(state, { instant: document.hidden });
+      renderScoreboard(state, { instant: document.hidden || isInfoScreenOpen(state) });
     }
 }
 
@@ -1511,25 +1564,20 @@ document.addEventListener("visibilitychange", () => {
     clearTimeout(closeScoreboardPanel._tReset);
     clearScoreAnimTimers();
 
-    // Abort running reveal animation so it can replay from the start on return.
+    // Hidden tab: finish reveal immediately (no replay on return).
     if (playerRevealInProgress) {
-      prClearTimers();
-      playerRevealInProgress = false;
-      playerRevealPlayedRound = null;
-      localRevealReadyRound = null;
-      prHideOverlay();
+      finishPlayerRevealHidden(lastState);
     }
 
-    // Abort running rule-intro animation and queue it for replay on return.
+    // Hidden tab: finish rule-intro immediately (no replay on return).
     if (playerRuleIntroInProgress) {
-      if (lastState && lastState.phase === "collecting") {
-        queuedRuleIntroState = lastState;
-      }
-      stopPlayerRuleIntro();
-      playerRuleIntroPlayedRound = null;
+      finishPlayerRuleIntroHidden(lastState);
     }
 
-    closeScoreboardPanel();
+    // Keep the revealed scoreboard in its final state while hidden.
+    if (!lastState || lastState.phase !== "revealed") {
+      closeScoreboardPanel();
+    }
     return;
   }
 
