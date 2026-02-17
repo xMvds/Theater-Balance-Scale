@@ -1688,7 +1688,7 @@ body.survivedTheme{
   .infoScoresRow,
   .infoDeltasRow{
     display:grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
     gap:8px 8px;
     align-items:start;
     justify-items:stretch;
@@ -1771,6 +1771,85 @@ body.survivedTheme{
 
   .infoScene.s4 .infoMathRow{
     transform: translateY(8px);
+  }
+}
+
+@media (max-width: 560px){
+  .infoPage .infoStage,
+  .playerRevealStage{
+    padding:10px;
+  }
+
+  .infoFrame{
+    width:100%;
+    height:100%;
+    padding: max(8px, env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom));
+    gap:8px;
+  }
+
+  .infoNamesRow,
+  .infoGuessesRow,
+  .infoScoresRow,
+  .infoDeltasRow{
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap:6px;
+  }
+
+  .infoName{
+    font-size: clamp(11px, 3.3vw, 14px);
+  }
+
+  .infoGuessTile{
+    padding:8px 4px;
+  }
+
+  .infoGuessTile .guessNum{
+    font-size: clamp(21px, 8.2vw, 32px);
+  }
+
+  .infoScore,
+  .infoDelta{
+    height:22px;
+  }
+
+  .infoScore .scoreNum,
+  .infoDelta .deltaNum{
+    font-size: clamp(13px, 4.1vw, 17px);
+  }
+
+  .infoMathRow{
+    --mathGap: 86px;
+  }
+
+  .bigMath{
+    width: clamp(92px, 38vw, 130px);
+    padding:6px 4px;
+  }
+
+  .infoMathRow .mathLabel{
+    font-size: clamp(9px, 2.8vw, 11px);
+  }
+
+  .infoMathRow .mathValue{
+    font-size: clamp(14px, 5vw, 20px);
+  }
+
+  .bigMathOp{
+    font-size: clamp(14px, 4.8vw, 19px);
+  }
+
+  .infoScene.s2 .infoMathRow{
+    height:66px;
+    margin-top:2px;
+    transform: translateY(-10px);
+  }
+
+  .infoScene.s4 .infoGuessesRow{
+    transform: translateY(-4px);
+  }
+
+  .infoScene.s4 .infoMathRow{
+    transform: translateY(4px);
   }
 }
 
