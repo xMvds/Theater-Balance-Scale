@@ -1698,17 +1698,19 @@ body.survivedTheme{
   .infoScoresRow,
   .infoDeltasRow{ height: 36px; }
 
-  .infoCell{ width: calc(50vw - 22px); max-width: 170px; }
+  .infoCell{ width: calc(50vw - 24px); max-width: 160px; }
   .infoGuessTile{ padding:10px 6px; }
-  .infoGuessTile .guessNum{ font-size: clamp(34px, 12vw, 52px); }
-  .infoName{ font-size: clamp(14px, 6vw, 20px); }
+  .infoGuessTile .guessNum{ font-size: clamp(34px, 11.5vw, 50px); }
+  .infoName{ font-size: clamp(14px, 5.4vw, 19px); }
 
-  .infoMathRow{ --mathGap: clamp(58px, 15vw, 86px); }
-  .bigMath{ width: calc(50vw - 22px); max-width: 170px; }
-  .bigMathOp{ font-size: clamp(18px, 7vw, 24px); }
+  .infoMathRow{ --mathGap: clamp(42px, 11vw, 62px); }
+  .bigMath{ width: calc(50vw - 24px); max-width: 160px; }
+  .bigMathOp{ font-size: clamp(16px, 6vw, 20px); letter-spacing: 0.01em; }
 
-  .infoScene.s2 .infoMathRow{ height:86px; margin-top:4px; transform: translateY(-10px); }
-  .infoScene.s4 .infoMathRow{ transform: translateY(2px); }
+  .infoScene.s2 .infoMathRow{ height:80px; margin-top:2px; transform: translateY(-8px); }
+  .infoScene.s3a #infoAvgBox{ transform: translate(calc(-50% - var(--mathGap, 52px)), -50%); }
+  .infoScene.s3b #infoTargetBox{ transform: translate(calc(-50% + var(--mathGap, 52px)), -50%); }
+  .infoScene.s4 .infoMathRow{ transform: translateY(0); }
 }
 
 /* Ensure old infoContent doesn't affect layout (legacy) */
