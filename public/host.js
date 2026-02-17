@@ -24,7 +24,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const nextBtn = document.getElementById("nextBtn");
   const devFillBtn = document.getElementById("devFillBtn");
   const resetBtn = document.getElementById("resetBtn");
-  // Player reveal is automatic (option 2): if no info screen is connected, players run the reveal.
+  const playerRevealToggle = document.getElementById("playerRevealToggle");
 
   // --- Player background test (A/B/C/D) ---
 // These buttons live on the HOST page, but they switch the BACKGROUND on all PLAYER screens.
@@ -520,7 +520,12 @@ let resetArmed = false;
   revealBtn?.addEventListener("click", () => socket.emit("host_reveal"));
   nextBtn?.addEventListener("click", () => socket.emit("host_next"));
 
-  // Player reveal is automatic now (option 2). No toggle.
+  // Toggle: play the info-style reveal animation on player screens (when not using the info screen).
+  let _toggleSyncing = false;
+  playerRevealToggle?.addEventListener("change", () => {
+    if (_toggleSyncing) return;
+    socket.emit("host_player_reveal_mode", { on: !!playerRevealToggle.checked });
+  });
 
   devFillBtn?.addEventListener("click", () => socket.emit("host_devfill"));
 
@@ -883,7 +888,11 @@ const playersTotal = state.players?.length ?? 0;
     nextBtn.disabled = isGameOver || !(state.phase === "revealed");
     devFillBtn.disabled = isGameOver || !(state.phase === "collecting");
 
-    // (no player reveal toggle)
+    if (playerRevealToggle) {
+      _toggleSyncing = true;
+      playerRevealToggle.checked = !!state.playerRevealMode;
+      _toggleSyncing = false;
+    }
 
     // Make reset the obvious action when the game has ended.
     resetBtn?.classList.toggle("resetPulse", isGameOver);

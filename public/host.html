@@ -21,6 +21,11 @@
         <button id="devFillBtn" class="btn">Dev Fill</button>
         <button id="resetBtn" class="btn">Reset</button>
       </div>
+
+      <label class="hostToggle" title="Speel zonder infoscherm: laat de info-reveal animatie op de players afspelen">
+        <input id="playerRevealToggle" type="checkbox" />
+        <span>Player reveal (zonder info)</span>
+      </label>
     </div>
 
     <div id="hostTiles" class="hostTiles"></div>
@@ -42,12 +47,13 @@
 
 
   <!-- BG editor (host only): live-edit FinisherHeader config for player background (mode C). -->
+ (host only): live-edit FinisherHeader config for player background (mode C). -->
   <div id="bgEditorModal" class="bgEditorModal hidden" role="dialog" aria-modal="true" aria-label="Background editor">
     <div class="bgEditorCard">
       <div class="bgEditorTop">
         <div>
           <div class="bgEditorTitle">BG editor — Player (C)</div>
-          <div class="bgEditorSub">Wijzigingen gaan live naar alle players.</div>
+          <div class="bgEditorSub">Wijzigingen gaan live naar alle players (als mode C actief is).</div>
         </div>
         <div class="bgEditorTopBtns">
           <button id="bgEditorCopyBtn" class="btn sm" type="button">Copy JSON</button>

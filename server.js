@@ -32,13 +32,9 @@ const game = {
   byKey: {}, // playerKey -> socketId
   lastRound: null,
 
-  // Reveal sync (option 2):
-  // If no info screen is connected when the host presses Reveal,
-  // players will run the reveal locally based on a shared start timestamp.
-  revealDriver: null, // "info" | "player" | null
-  revealStartedAt: null, // epoch ms
-  revealDurationMs: null,
-  infoClientCount: 0,
+  // When true, players run the info-style reveal animation on their own screen
+  // (useful when playing without the info screen).
+  playerRevealMode: false,
 
   // Player background mode, controlled from the host
   // A = static image, B = animated blobs, C/D = FinisherHeader particles
@@ -81,11 +77,11 @@ const game = {
   gameOver: false,
 };
 
-// Reveal timing (must match the front-end timelines)
-// Info screen emits `info_reveal_done` at ~10300ms.
-const INFO_ANIM_TOTAL_MS = 10300; // ms
-// Player-side reveal includes the info timeline + slower fade-out back to UI.
-const PLAYER_REVEAL_TOTAL_MS = 12000; // ms
+// Fallback: if the info screen never signals completion (e.g. not open),
+// auto-unlock the player scoreboard after the expected animation duration.
+const INFO_ANIM_TOTAL_MS = 11000; // ms
+// Player-side reveal (black -> info animation -> black -> back) takes a bit longer.
+const PLAYER_REVEAL_TOTAL_MS = 12500; // ms
 let revealReadyTimer = null;
 
 // Allow dev fill from player debug UI only when explicitly enabled.
@@ -104,13 +100,6 @@ function clearRevealReady() {
     clearTimeout(revealReadyTimer);
     revealReadyTimer = null;
   }
-}
-
-function clearRevealSync() {
-  game.revealDriver = null;
-  game.revealStartedAt = null;
-  game.revealDurationMs = null;
-  clearRevealReady();
 }
 
 
@@ -197,12 +186,7 @@ function broadcastState() {
     phase: game.phase,
     round: game.round,
     aliveNow,
-    // Reveal sync metadata (option 2)
-    revealDriver: game.revealDriver,
-    revealStartedAt: game.revealStartedAt,
-    revealDurationMs: game.revealDurationMs,
-    infoClientCount: game.infoClientCount || 0,
-    serverNow: Date.now(),
+    playerRevealMode: !!game.playerRevealMode,
     playerBgMode: game.playerBgMode || "C",
     playerFinisherConfigs: game.playerFinisherConfigs || null,
     roundRules: game.roundRules,
@@ -344,7 +328,7 @@ function kickAll() {
   game.roundRules = null;
   game.ruleIntro = null;
   game.gameOver = false;
-  clearRevealSync();
+  clearRevealReady();
   broadcastState();
 }
 
@@ -365,14 +349,6 @@ io.on("connection", (socket) => {
 	    // Do NOT auto-kick players when the host opens/refreshes the host page.
 	    // This keeps the current lobby/game intact when the host comes in later.
 	    broadcastState();
-  });
-
-  // Info screen announces itself so we can auto-switch the reveal driver.
-  socket.on("info_hello", () => {
-    if (socket.data.isInfo) return;
-    socket.data.isInfo = true;
-    game.infoClientCount = Math.max(0, (game.infoClientCount || 0) + 1);
-    broadcastState();
   });
 
   // Host can switch the PLAYER background for quick A/B/C/D testing.
@@ -446,6 +422,28 @@ socket.on("host_player_bg_mode", ({ mode } = {}) => {
 
 // Info screen signals when its reveal animation is finished.
 socket.on("info_reveal_done", ({ round }) => {
+  // If the host enabled "player reveal mode", we ignore info completion signals
+  // so the player-driven reveal stays in control.
+  if (game.playerRevealMode) return;
+  const r = Number(round);
+  if (!Number.isFinite(r)) return;
+  if (game.phase !== "revealed") return;
+  if (r !== game.round) return;
+  markRevealReady(r);
+});
+
+// Host toggle: let players run the info-style reveal when the info screen isn't used.
+socket.on("host_player_reveal_mode", ({ on }) => {
+  if (!socket.data.isHost) return;
+  game.playerRevealMode = !!on;
+  broadcastState();
+});
+
+// Optional: players can signal they finished the local reveal animation.
+// This lets the server unlock early (instead of waiting only on a timer) while
+// players that are still animating can simply ignore the unlock until done.
+socket.on("player_reveal_done", ({ round }) => {
+  if (!game.playerRevealMode) return;
   const r = Number(round);
   if (!Number.isFinite(r)) return;
   if (game.phase !== "revealed") return;
@@ -571,7 +569,7 @@ socket.on("join", ({ name, playerKey }) => {
     game.phase = "collecting";
     game.round += 1;
 
-    clearRevealSync();
+    clearRevealReady();
     resetForNewRound();
     setRoundRulesSnapshot(); // snapshot rules at ROUND START
 
@@ -589,19 +587,15 @@ socket.on("join", ({ name, playerKey }) => {
     game.gameOver = aliveIds().length <= 1;
 
     clearRevealReady();
-
-    // Option 2: automatic driver.
-    // If no info screen is connected when reveal starts, players will run the reveal locally.
-    game.revealDriver = (game.infoClientCount || 0) > 0 ? "info" : "player";
-    game.revealStartedAt = Date.now();
-    game.revealDurationMs = (game.revealDriver === "player") ? PLAYER_REVEAL_TOTAL_MS : INFO_ANIM_TOTAL_MS;
-
-    // Deterministic unlock time so late-joining tabs can skip the reveal.
+    // Unlock timing:
+    // - Normal mode: wait for info screen completion (fallback timer in case info isn't open).
+    // - Player reveal mode: players run the animation locally, so we unlock after that duration.
+    const waitMs = game.playerRevealMode ? PLAYER_REVEAL_TOTAL_MS : INFO_ANIM_TOTAL_MS;
     revealReadyTimer = setTimeout(() => {
       if (game.phase === "revealed" && game.revealReadyRound !== game.round) {
         markRevealReady(game.round);
       }
-    }, game.revealDurationMs);
+    }, waitMs);
 
     broadcastState();
   });
@@ -614,7 +608,7 @@ socket.on("join", ({ name, playerKey }) => {
     game.phase = "collecting";
     game.round += 1;
 
-    clearRevealSync();
+    clearRevealReady();
     resetForNewRound();
     setRoundRulesSnapshot(); // snapshot rules for the new round
 
@@ -654,7 +648,7 @@ socket.on("host_reset", () => {
     game.roundRules = null;
     game.ruleIntro = null;
   game.gameOver = false;
-  clearRevealSync();
+  clearRevealReady();
 
     broadcastState();
   });
@@ -665,9 +659,6 @@ socket.on("host_reset", () => {
   });
 
   socket.on("disconnect", () => {
-    if (socket.data && socket.data.isInfo) {
-      game.infoClientCount = Math.max(0, (game.infoClientCount || 0) - 1);
-    }
     const p = game.players[socket.id];
     if (!p) {
       broadcastState();

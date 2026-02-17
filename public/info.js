@@ -14,27 +14,6 @@
 
 const socket = io();
 
-// Simple server clock sync (state.serverNow is sent by server)
-let serverOffsetMs = 0;
-function updateServerClock(state){
-  const sn = state && typeof state.serverNow === "number" ? state.serverNow : null;
-  if (sn != null && Number.isFinite(sn)) {
-    serverOffsetMs = sn - Date.now();
-  }
-}
-function serverNow(){
-  return Date.now() + serverOffsetMs;
-}
-function revealElapsedMs(state){
-  const rs = state && typeof state.revealStartedAt === "number" ? state.revealStartedAt : null;
-  if (rs == null || !Number.isFinite(rs)) return 0;
-  return Math.max(0, serverNow() - rs);
-}
-
-socket.on("connect", () => {
-  socket.emit("info_hello");
-});
-
 const blackout = document.getElementById("infoBlackout");
 const stage = document.getElementById("infoStage");
 
@@ -253,7 +232,6 @@ function computeNewRuleLines(state) {
 
 function buildRevealScene(state, opts = {}) {
   const instant = !!opts.instant;
-  const startAtMs = Math.max(0, Number(opts.startAtMs || 0));
   clearAnimTimers();
 
   // reset classes
@@ -271,10 +249,9 @@ function buildRevealScene(state, opts = {}) {
   avgValEl.textContent = fmt2(avg);
   targetValEl.textContent = fmt2(target);
 
-  const list = (state.players || []).slice().sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  const list = state.players.slice().sort((a, b) => a.name.localeCompare(b.name));
 
   const pendingScoreAnims = [];
-  const allScoreCells = [];
 
   // Build aligned cells (same count per row)
   for (const p of list) {
@@ -293,32 +270,33 @@ function buildRevealScene(state, opts = {}) {
     // Total score
     const scoreCell = document.createElement("div");
     scoreCell.className = "infoCell infoScore";
-    const d = (typeof p.lastDelta === "number") ? p.lastDelta : 0;
-    const isBad = d < 0;
+const d = (typeof p.lastDelta === "number") ? p.lastDelta : 0;
+const isBad = d < 0;
 
-    // Winner glow (apply at the very end, together with min points)
-    const isWinner = Array.isArray(lr.winnerIds) && lr.winnerIds.includes(p.id);
-    if (isWinner) {
-      guessCell.dataset.winner = "1";
-      nameCell.dataset.winner = "1";
-    }
+// Winner glow (info): apply at the very end (together with min points)
+const isWinner = Array.isArray(lr.winnerIds) && lr.winnerIds.includes(p.id);
+if (isWinner) {
+  guessCell.dataset.winner = "1";
+  nameCell.dataset.winner = "1";
+}
 
-    // Build score cell with OLD score, animate only when score row becomes visible.
-    const prev = prevScores.has(p.id) ? prevScores.get(p.id) : null;
-    const from = (typeof prev === "number") ? prev : (typeof d === "number" ? (p.score - d) : p.score);
-    const to = p.score;
+// INFO: score-animatie moet op "hoeveel minpunten je HEBT" (totale score).
+// We bouwen de score-cel eerst met de OUDE score, en animeren pas zodra de score-rij zichtbaar is.
+const prev = prevScores.has(p.id) ? prevScores.get(p.id) : null;
+const from = (typeof prev === "number") ? prev : (typeof d === "number" ? (p.score - d) : p.score);
+const to = p.score;
 
-    allScoreCells.push({ el: scoreCell, to });
+if (instant) {
+  // bij instant (bv. info-refresh nadat reveal al klaar is): toon eindstand direct
+  const bad = (typeof to === "number") ? (to < 0) : false;
+  setScoreStatic(scoreCell, to, bad);
+} else {
+  scoreCell.innerHTML = `<div class="scoreNum live ${isBad ? "bad" : "good"}">${from}</div>`;
 
-    if (instant) {
-      const bad = (typeof to === "number") ? (to < 0) : false;
-      setScoreStatic(scoreCell, to, bad);
-    } else {
-      scoreCell.innerHTML = `<div class="scoreNum live ${isBad ? "bad" : "good"}">${from}</div>`;
-      if (isBad && typeof from === "number" && typeof to === "number" && to !== from) {
-        pendingScoreAnims.push({ el: scoreCell, from, to });
-      }
-    }
+  if (isBad && typeof from === "number" && typeof to === "number" && to !== from) {
+    pendingScoreAnims.push({ el: scoreCell, from, to });
+  }
+}
 
     scoresRow.appendChild(scoreCell);
     prevScores.set(p.id, p.score);
@@ -326,109 +304,76 @@ function buildRevealScene(state, opts = {}) {
     // Delta
     const deltaCell = document.createElement("div");
     deltaCell.className = "infoCell infoDelta";
+    // Delta blijft gewoon statisch (en rood als < 0)
     setDeltaStatic(deltaCell, d);
     deltasRow.appendChild(deltaCell);
   }
 
-  const snapToEnd = () => {
+  if (instant) {
+    // Jump to the end-state immediately (e.g. info refreshed after reveal is done).
+    // Add a temporary class that disables transitions/animations so refresh doesn't
+    // re-play the "× 0.8 =" reveal (or other fades).
     scene.classList.add("instant");
     scene.classList.add("ready","s1","s2","s3a","s3","s3b","s4a","s4");
     for (const el of document.querySelectorAll("[data-winner=\"1\"]")) {
       el.classList.add("winner");
     }
-    // Ensure totals are at final values
-    for (const sc of allScoreCells) {
-      const bad = (typeof sc.to === "number") ? (sc.to < 0) : false;
-      setScoreStatic(sc.el, sc.to, bad);
-    }
     socket.emit("info_reveal_done", { round: state.round });
-  };
-
-  if (instant) {
-    snapToEnd();
     return;
   }
 
-  // If we join late, jump to the correct visual state without replaying past transitions.
-  const applyAt = (ms) => {
-    const t = Math.max(0, ms);
-    scene.classList.add("instant");
+  // Kick the staged animation sequence
+  requestAnimationFrame(() => {
     scene.classList.add("ready");
-    scene.classList.add("s1");
-    if (t >= 1600) scene.classList.add("s2");
-    if (t >= 3000) scene.classList.add("s3a");
-    if (t >= 3800) scene.classList.add("s3");
-    if (t >= 4600) scene.classList.add("s3b");
-    if (t >= 6200) scene.classList.add("s4a");
-    if (t >= 7600) {
-      scene.classList.add("s4");
-      for (const el of document.querySelectorAll("[data-winner=\"1\"]")) {
-        el.classList.add("winner");
-      }
-    }
+    // Step 1: guesses fade in centered
+    requestAnimationFrame(() => scene.classList.add("s1"));
 
-    // Catch up score animations
-    if (t >= 7600) {
-      if (t >= 8500) {
-        for (const sc of allScoreCells) {
-          const bad = (typeof sc.to === "number") ? (sc.to < 0) : false;
-          setScoreStatic(sc.el, sc.to, bad);
-        }
-      } else if (pendingScoreAnims.length) {
-        const delay = Math.max(0, 8500 - t);
-        animTimers.push(setTimeout(() => {
-          for (const a of pendingScoreAnims) {
-            animateScoreNumber(a.el, a.from, a.to, true);
-          }
-        }, delay));
-      }
-    }
+    // Step 2: guesses slide up, avg appears
+animTimers.push(setTimeout(() => scene.classList.add("s2"), 1600));
 
-    // Remove instant after layout so future steps can animate normally.
-    requestAnimationFrame(() => requestAnimationFrame(() => scene.classList.remove("instant")));
-  };
+// Step 3a: gemiddelde schuift links (zonder som)
+animTimers.push(setTimeout(() => scene.classList.add("s3a"), 3000));
 
-  // If we're already past the end, snap.
-  if (startAtMs >= 10300) {
-    snapToEnd();
-    return;
+// Step 3: som verschijnt (blijft gecentreerd)
+animTimers.push(setTimeout(() => scene.classList.add("s3"), 3800));
+
+// Step 3b: target verschijnt rechts (stilstaand infaden)
+animTimers.push(setTimeout(() => scene.classList.add("s3b"), 4600));
+
+// Step 4a: math row zakt omlaag (maakt ruimte) BEFORE scores appear
+animTimers.push(setTimeout(() => {
+  scene.classList.add("s4a");
+}, 6200));
+
+// Step 4: scores/deltas + names appear after math row moved
+animTimers.push(setTimeout(() => {
+  scene.classList.add("s4");
+  // Apply winner glow now (with the min points reveal)
+  for (const el of document.querySelectorAll("[data-winner=\"1\"]")) {
+    el.classList.add("winner");
   }
 
-  applyAt(startAtMs);
 
-  const schedule = (at, fn) => {
-    const d = at - startAtMs;
-    if (d <= 0) return;
-    animTimers.push(setTimeout(fn, d));
-  };
+  // Start score animations now that the score row is visible
+  if (pendingScoreAnims.length) {
+    animTimers.push(setTimeout(() => {
+      for (const a of pendingScoreAnims) {
+        animateScoreNumber(a.el, a.from, a.to, true);
+      }
+    }, 900));
+  }
+}, 7600));
 
-  schedule(1600, () => scene.classList.add("s2"));
-  schedule(3000, () => scene.classList.add("s3a"));
-  schedule(3800, () => scene.classList.add("s3"));
-  schedule(4600, () => scene.classList.add("s3b"));
-  schedule(6200, () => scene.classList.add("s4a"));
-  schedule(7600, () => {
-    scene.classList.add("s4");
-    for (const el of document.querySelectorAll("[data-winner=\"1\"]")) {
-      el.classList.add("winner");
-    }
-    if (pendingScoreAnims.length) {
-      animTimers.push(setTimeout(() => {
-        for (const a of pendingScoreAnims) {
-          animateScoreNumber(a.el, a.from, a.to, true);
-        }
-      }, 900));
-    }
-  });
-
-  schedule(10300, () => {
-    socket.emit("info_reveal_done", { round: state.round });
+// Signal to the server when the info reveal animation is finished.
+// Players will only open their scoreboard after this.
+animTimers.push(setTimeout(() => {
+  socket.emit("info_reveal_done", { round: state.round });
+}, 10300));
   });
 }
 
 socket.on("state", (state) => {
   lastState = state;
-  updateServerClock(state);
 
   // reset bij lobby (nieuwe game/reset)
   if (state.phase === "lobby") {
@@ -491,8 +436,6 @@ socket.on("state", (state) => {
   const revealKey = stableRevealKey(state);
   if (revealKey !== lastRevealKey) {
     lastRevealKey = revealKey;
-    const instant = state.revealReadyRound === state.round;
-    const startAtMs = instant ? 0 : revealElapsedMs(state);
-    buildRevealScene(state, { instant, startAtMs });
+    buildRevealScene(state, { instant: state.revealReadyRound === state.round });
   }
 });

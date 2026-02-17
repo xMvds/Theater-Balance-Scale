@@ -1627,25 +1627,6 @@ body.survivedTheme{
   opacity: 1 !important;
 }
 
-/* Phone-friendly layout for the big reveal scene */
-@media (max-width: 600px){
-  .infoFrame{ height: 96vh; gap: 14px; }
-  .infoCell{ width: clamp(140px, 42vw, 240px); }
-  .infoName{ font-size: 18px; }
-  .infoGuessTile{ padding: 14px 10px; }
-  .infoGuessTile .guessNum{ font-size: 52px; }
-
-  .infoMathRow{ --mathGap: 190px; }
-  .bigMath{ width: clamp(160px, 44vw, 260px); padding: 12px 10px; }
-  .bigMathOp{ font-size: 28px; }
-  .bigMathAvg, .bigMathTarget{ font-size: 18px; }
-
-  /* Allow wrap without clipping */
-  .infoNamesRow,
-  .infoScoresRow,
-  .infoDeltasRow{ height: auto; min-height: 44px; }
-}
-
 /* s3b: target verschijnt rechts */
 .infoScene.s3b #infoTargetBox{
   opacity:1;
