@@ -1137,23 +1137,6 @@ body.survivedTheme{
 .hostHint{ font-size:12px; color: rgba(255,255,255,0.55); }
 .hostBtns{ display:flex; gap:6px; flex-wrap:wrap; }
 
-/* Host toggle switch */
-.hostToggle{
-  display:flex;
-  align-items:center;
-  gap:10px;
-  margin-left:10px;
-  padding:8px 10px;
-  border:1px solid rgba(255,255,255,0.08);
-  background: rgba(0,0,0,0.25);
-  color: rgba(255,255,255,0.72);
-  font-size:12px;
-  letter-spacing:0.08em;
-  text-transform:uppercase;
-  user-select:none;
-}
-.hostToggle input{ width:18px; height:18px; accent-color: rgba(255,255,255,0.85); }
-.hostToggle span{ white-space:nowrap; }
 
 .hostTiles{
   display:flex;
@@ -1672,6 +1655,60 @@ body.survivedTheme{
   align-items:center;
   justify-content:center;
   gap:18px;
+}
+
+@media (max-width: 820px){
+  .infoFrame{
+    width:min(100vw, 980px);
+    height:min(100vh, 900px);
+    padding: 12px 10px;
+    gap:12px;
+  }
+  .infoNamesRow,
+  .infoGuessesRow,
+  .infoScoresRow,
+  .infoDeltasRow{ gap:10px; }
+  .infoCell{ width: clamp(124px, 30vw, 240px); }
+  .infoGuessTile{ padding:12px 8px; }
+  .infoGuessTile .guessNum{ font-size: clamp(38px, 11.5vw, 58px); }
+  .infoName{ font-size: clamp(15px, 4.3vw, 22px); }
+  .infoScore .scoreNum,
+  .infoDelta .deltaNum{ font-size: clamp(15px, 4.5vw, 22px); }
+
+  .infoMathRow{ --mathGap: clamp(72px, 19vw, 150px); }
+  .bigMath{ width: clamp(120px, 33vw, 220px); padding:10px 8px; }
+  .bigMathOp{
+    font-size: clamp(20px, 5.4vw, 30px);
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+
+  .infoScene.s2 .infoMathRow{ height:102px; transform: translateY(-14px); }
+  .infoScene.s3a #infoAvgBox{ transform: translate(calc(-50% - var(--mathGap, 120px)), -50%); }
+  .infoScene.s3b #infoTargetBox{ transform: translate(calc(-50% + var(--mathGap, 120px)), -50%); }
+  .infoScene.s4 .infoMathRow{ transform: translateY(6px); }
+  .infoScene.s4 .infoGuessesRow{ transform: translateY(-2px); }
+}
+
+@media (max-width: 480px){
+  .infoFrame{ padding: 10px 8px; gap:8px; }
+  .infoScene{ gap:8px; }
+
+  .infoNamesRow,
+  .infoScoresRow,
+  .infoDeltasRow{ height: 36px; }
+
+  .infoCell{ width: calc(50vw - 22px); max-width: 170px; }
+  .infoGuessTile{ padding:10px 6px; }
+  .infoGuessTile .guessNum{ font-size: clamp(34px, 12vw, 52px); }
+  .infoName{ font-size: clamp(14px, 6vw, 20px); }
+
+  .infoMathRow{ --mathGap: clamp(58px, 15vw, 86px); }
+  .bigMath{ width: calc(50vw - 22px); max-width: 170px; }
+  .bigMathOp{ font-size: clamp(18px, 7vw, 24px); }
+
+  .infoScene.s2 .infoMathRow{ height:86px; margin-top:4px; transform: translateY(-10px); }
+  .infoScene.s4 .infoMathRow{ transform: translateY(2px); }
 }
 
 /* Ensure old infoContent doesn't affect layout (legacy) */
