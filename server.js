@@ -344,6 +344,27 @@ function kickOne(socketId) {
 }
 
 io.on("connection", (socket) => {
+  socket.on("player_hello", ({ playerKey } = {}) => {
+    const started = (game.phase !== "lobby") || (game.round > 0);
+    const key = String(playerKey || "").trim();
+
+    // Mobile browsers can reconnect sockets after being in the background.
+    // Rebind by player key so this socket continues to receive/submit as expected.
+    if (started && key) {
+      const existingSid = game.byKey[key];
+      const p = game.players[existingSid];
+      if (p) {
+        if (existingSid && existingSid !== socket.id) delete game.players[existingSid];
+        p.socketId = socket.id;
+        p.connected = true;
+        game.players[socket.id] = p;
+        game.byKey[key] = socket.id;
+      }
+    }
+
+    broadcastState();
+  });
+
   socket.on("host_hello", () => {
     socket.data.isHost = true;
 	    // Do NOT auto-kick players when the host opens/refreshes the host page.
