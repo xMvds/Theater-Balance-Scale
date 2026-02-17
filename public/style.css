@@ -1664,26 +1664,6 @@ body.survivedTheme{
     padding: 12px 10px;
     gap:12px;
   }
-  .infoCell{ width: clamp(130px, 30vw, 260px); }
-  .infoGuessTile{ padding:14px 8px; }
-  .infoGuessTile .guessNum{ font-size: clamp(42px, 12vw, 64px); }
-  .infoName{ font-size: clamp(16px, 4.5vw, 24px); }
-  .infoScore .scoreNum,
-  .infoDelta .deltaNum{ font-size: clamp(16px, 4.8vw, 24px); }
-  .infoMathRow{ --mathGap: clamp(90px, 22vw, 180px); }
-  .bigMath{ width: clamp(130px, 34vw, 250px); padding:12px 8px; }
-  .bigMathOp{ font-size: clamp(24px, 7vw, 34px); }
-  .infoScene.s2 .infoMathRow{ height:110px; transform: translateY(-18px); }
-  .infoScene.s4 .infoMathRow{ transform: translateY(8px); }
-  .infoScene.s4 .infoGuessesRow{ transform: translateY(-4px); }
-}
-
-@media (max-width: 480px){
-  .infoNamesRow,
-  .infoScoresRow,
-  .infoDeltasRow{ height: 40px; }
-  .infoScene{ gap:10px; }
-  .infoScene.s2 .infoMathRow{ height:92px; margin-top:4px; }
 }
 
 /* Ensure old infoContent doesn't affect layout (legacy) */
