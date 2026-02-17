@@ -1704,7 +1704,7 @@ body.survivedTheme{
 
   .infoScoresRow,
   .infoDeltasRow{
-    margin-top:-4px;
+    margin-top:0;
   }
 
   .infoCell{
@@ -1728,7 +1728,7 @@ body.survivedTheme{
 
   .infoScore,
   .infoDelta{
-    height:24px;
+    height:28px;
   }
 
   .infoScore .scoreNum,
@@ -1812,7 +1812,7 @@ body.survivedTheme{
 
   .infoScore,
   .infoDelta{
-    height:22px;
+    height:26px;
   }
 
   .infoScore .scoreNum,

@@ -254,22 +254,31 @@ function buildRevealScene(state, opts = {}) {
   const pendingScoreAnims = [];
 
   // Build aligned cells (same count per row)
-  for (const p of list) {
+  list.forEach((p, index) => {
+    const col = (index % 4) + 1;
+    const row = Math.floor(index / 4) + 1;
+
     // Names (hidden at first)
     const nameCell = document.createElement("div");
     nameCell.className = "infoCell infoName";
+    nameCell.style.gridColumn = String(col);
+    nameCell.style.gridRow = String(row);
     nameCell.textContent = p.name;
     namesRow.appendChild(nameCell);
 
     // Guess tile
     const guessCell = document.createElement("div");
     guessCell.className = "infoCell infoGuessTile";
+    guessCell.style.gridColumn = String(col);
+    guessCell.style.gridRow = String(row);
     guessCell.innerHTML = `<div class="guessNum">${(typeof p.lastGuess === "number") ? p.lastGuess : "—"}</div>`;
     guessesRow.appendChild(guessCell);
 
     // Total score
     const scoreCell = document.createElement("div");
     scoreCell.className = "infoCell infoScore";
+    scoreCell.style.gridColumn = String(col);
+    scoreCell.style.gridRow = String(row);
 const d = (typeof p.lastDelta === "number") ? p.lastDelta : 0;
 const isBad = d < 0;
 
@@ -304,10 +313,12 @@ if (instant) {
     // Delta
     const deltaCell = document.createElement("div");
     deltaCell.className = "infoCell infoDelta";
+    deltaCell.style.gridColumn = String(col);
+    deltaCell.style.gridRow = String(row);
     // Delta blijft gewoon statisch (en rood als < 0)
     setDeltaStatic(deltaCell, d);
     deltasRow.appendChild(deltaCell);
-  }
+  });
 
   if (instant) {
     // Jump to the end-state immediately (e.g. info refreshed after reveal is done).

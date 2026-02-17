@@ -206,11 +206,13 @@ let playerRevealInProgress = false;
 let playerRevealPlayedRound = null;
 let playerRevealTimers = [];
 let overlayPrevScores = new Map();
+let queuedRevealState = null;
 
 // Round-rule intro overlay
 let playerRuleIntroInProgress = false;
 let playerRuleIntroPlayedRound = null;
 let playerRuleIntroTimers = [];
+let queuedRuleIntroState = null;
 
 // Keep rule-intro logic identical to /info.html: we detect which rules became active
 // compared to the previous round and show the "Nieuwe Regel" overlay for those.
@@ -702,14 +704,18 @@ function startPlayerRuleIntro(state) {
   }
 
   const lines = priComputeNewRuleLines(state);
-  if (!lines.length) return;
-
-  // If hidden, don't animate — just mark as shown.
-  if (document.hidden) {
-    playerRuleIntroPlayedRound = state.round;
+  if (!lines.length) {
+    if (queuedRuleIntroState && queuedRuleIntroState.round === state.round) queuedRuleIntroState = null;
     return;
   }
 
+  // If hidden, queue and replay on visibility/focus/pageshow.
+  if (document.hidden) {
+    queuedRuleIntroState = state;
+    return;
+  }
+
+  queuedRuleIntroState = null;
   playerRuleIntroPlayedRound = state.round;
   playerRuleIntroInProgress = true;
   priDelayRound = state.round;
@@ -738,6 +744,23 @@ function startPlayerRuleIntro(state) {
       playerRuleIntroInProgress = false;
     }, 11200 + 460);
   }, 1000);
+}
+
+function flushQueuedRuleIntro(stateOverride = null) {
+  if (document.hidden) return false;
+  if (playerRevealInProgress) return false;
+  if (playerRuleIntroInProgress) return false;
+
+  const s = stateOverride || queuedRuleIntroState || lastState;
+  if (!s || s.phase !== "collecting") return false;
+  if (playerRuleIntroPlayedRound === s.round) {
+    queuedRuleIntroState = null;
+    return false;
+  }
+
+  queuedRuleIntroState = s;
+  startPlayerRuleIntro(s);
+  return true;
 }
 
 function prFmt2(n) {
@@ -791,16 +814,23 @@ function prBuildRevealScene(state, opts = {}) {
   const list = (state.players || []).slice().sort((a,b)=> String(a.name||"").localeCompare(String(b.name||"")));
   const pendingScoreAnims = [];
 
-  for (const p of list) {
+  list.forEach((p, index) => {
+    const col = (index % 4) + 1;
+    const row = Math.floor(index / 4) + 1;
+
     // Names (hidden at first)
     const nameCell = document.createElement("div");
     nameCell.className = "infoCell infoName";
+    nameCell.style.gridColumn = String(col);
+    nameCell.style.gridRow = String(row);
     nameCell.textContent = p.name;
     infoNamesRow?.appendChild(nameCell);
 
     // Guess tile
     const guessCell = document.createElement("div");
     guessCell.className = "infoCell infoGuessTile";
+    guessCell.style.gridColumn = String(col);
+    guessCell.style.gridRow = String(row);
     guessCell.innerHTML = `<div class="guessNum">${(typeof p.lastGuess === "number") ? p.lastGuess : "—"}</div>`;
     infoGuessesRow?.appendChild(guessCell);
 
@@ -817,6 +847,8 @@ function prBuildRevealScene(state, opts = {}) {
     // Total score (animate from previous)
     const scoreCell = document.createElement("div");
     scoreCell.className = "infoCell infoScore";
+    scoreCell.style.gridColumn = String(col);
+    scoreCell.style.gridRow = String(row);
     const prev = (typeof p.prevScore === "number") ? p.prevScore : (overlayPrevScores.has(p.id) ? overlayPrevScores.get(p.id) : null);
     const from = (typeof prev === "number") ? prev : ((typeof p.score === "number" && typeof d === "number") ? (p.score - d) : p.score);
     const to = p.score;
@@ -836,11 +868,13 @@ function prBuildRevealScene(state, opts = {}) {
     // Delta (static)
     const deltaCell = document.createElement("div");
     deltaCell.className = "infoCell infoDelta";
+    deltaCell.style.gridColumn = String(col);
+    deltaCell.style.gridRow = String(row);
     const isBadDelta = d < 0;
     const txt = (typeof d === "number") ? (d === 0 ? "0" : String(d)) : "0";
     deltaCell.innerHTML = `<div class="deltaNum ${isBadDelta ? "bad" : "neutral"}">${txt}</div>`;
     infoDeltasRow?.appendChild(deltaCell);
-  }
+  });
 
   if (instant) {
     infoScene.classList.add("instant");
@@ -911,7 +945,10 @@ function startPlayerReveal(state) {
   if (playerRevealPlayedRound === state.round) return;
 
   // If the tab is hidden, wait until it becomes visible and replay from the start.
-  if (document.hidden) return;
+  if (document.hidden) {
+    queuedRevealState = state;
+    return;
+  }
 
   prClearTimers();
   playerRevealInProgress = true;
@@ -972,6 +1009,25 @@ function startPlayerReveal(state) {
     playerRevealPlayedRound = state.round;
     try{ playerRevealBlackout.style.transitionDuration = "420ms"; }catch(e){}
   }, endAt + 620 + OUT_MS + 180);
+}
+
+function flushQueuedReveal() {
+  if (document.hidden) return false;
+  const s = queuedRevealState || pendingRevealState || lastState;
+  if (!s || s.phase !== "revealed") return false;
+
+  if (playerRevealPlayedRound === s.round && !playerRevealInProgress) {
+    queuedRevealState = null;
+    renderScoreboard(s, { instant: false });
+    return true;
+  }
+
+  if (!playerRevealInProgress) {
+    closeScoreboardPanel();
+    startPlayerReveal(s);
+  }
+  queuedRevealState = null;
+  return true;
 }
 
 
@@ -1159,6 +1215,7 @@ function replayRevealIfNeeded(stateOverride = null) {
   if (playerRevealPlayedRound === s.round && !playerRevealInProgress) {
     renderScoreboard(s, { instant: document.hidden || document.body.classList.contains("noAnim") });
   } else {
+    queuedRevealState = s;
     closeScoreboardPanel();
     startPlayerReveal(s);
   }
@@ -1317,12 +1374,14 @@ socket.on("state", (state) => {
     playerRevealInProgress = false;
     playerRevealPlayedRound = null;
     localRevealReadyRound = null;
+    queuedRevealState = null;
     prHideOverlay();
 
     // reset rule-intro overlay state
     priClearTimers();
     playerRuleIntroInProgress = false;
     playerRuleIntroPlayedRound = null;
+    queuedRuleIntroState = null;
     priHideRoundRulesOverlay();
     return;
   }
@@ -1369,6 +1428,7 @@ socket.on("state", (state) => {
       }
 
       // Show new round-rule announcements as a full-screen overlay on the player.
+      queuedRuleIntroState = state;
       startPlayerRuleIntro(state);
     }
 
@@ -1386,6 +1446,8 @@ socket.on("state", (state) => {
     playerRevealInProgress = false;
     playerRevealPlayedRound = null;
     localRevealReadyRound = null;
+    queuedRevealState = null;
+    queuedRuleIntroState = null;
     if (!playerRuleIntroInProgress) prHideOverlay();
     closeScoreboardPanel();
     pendingRevealState = null;
@@ -1395,6 +1457,7 @@ socket.on("state", (state) => {
 
 
   if (state.phase === "revealed") {
+    queuedRuleIntroState = null;
     // If we were showing a rule-intro overlay, stop it when the reveal starts.
     if (playerRuleIntroInProgress) stopPlayerRuleIntro();
 
@@ -1411,9 +1474,11 @@ socket.on("state", (state) => {
     // Always play the full reveal animation on players once per revealed round,
     // even if this tab is opened later during/after the host info timeline.
     if (!revealDoneLocally) {
+      queuedRevealState = state;
       closeScoreboardPanel();
       startPlayerReveal(state);
     } else {
+      queuedRevealState = null;
       renderScoreboard(state, { instant: document.hidden });
     }
 }
@@ -1455,16 +1520,40 @@ document.addEventListener("visibilitychange", () => {
       prHideOverlay();
     }
 
+    // Abort running rule-intro animation and queue it for replay on return.
+    if (playerRuleIntroInProgress) {
+      if (lastState && lastState.phase === "collecting") {
+        queuedRuleIntroState = lastState;
+      }
+      stopPlayerRuleIntro();
+      playerRuleIntroPlayedRound = null;
+    }
+
     closeScoreboardPanel();
     return;
   }
 
   // Visible again: request fresh state and replay reveal (if needed) without stale transitions.
   document.body.classList.add("noAnim");
-  if (!replayRevealIfNeeded(s)) {
+  if (!flushQueuedReveal() && !replayRevealIfNeeded(s) && !flushQueuedRuleIntro(s)) {
     closeScoreboardPanel();
   }
   requestAnimationFrame(() => document.body.classList.remove("noAnim"));
+});
+
+window.addEventListener("focus", () => {
+  if (document.hidden) return;
+  requestFreshPlayerState();
+  requestAnimationFrame(() => {
+    if (!flushQueuedReveal()) flushQueuedRuleIntro();
+  });
+});
+
+window.addEventListener("pageshow", () => {
+  if (document.hidden) return;
+  requestAnimationFrame(() => {
+    if (!flushQueuedReveal()) flushQueuedRuleIntro();
+  });
 });
 
 
