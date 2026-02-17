@@ -1151,6 +1151,20 @@ function setGameVisible(visible) {
   panelGame.classList.toggle("hidden", !visible);
 }
 
+function replayRevealIfNeeded(stateOverride = null) {
+  if (!hasJoined) return false;
+  const s = stateOverride || pendingRevealState || lastState;
+  if (!s || s.phase !== "revealed") return false;
+
+  if (playerRevealPlayedRound === s.round && !playerRevealInProgress) {
+    renderScoreboard(s, { instant: document.hidden || document.body.classList.contains("noAnim") });
+  } else {
+    closeScoreboardPanel();
+    startPlayerReveal(s);
+  }
+  return true;
+}
+
 joinBtn.addEventListener("click", () => {
   const name = nameInput.value;
   const key = getPlayerKey();
@@ -1187,6 +1201,13 @@ socket.on("join_ok", ({ name }) => {
   setViews(true);
   showLobbyMessage(name);
   buildGrid();
+
+  // On reconnect/auto-rejoin we can miss a reveal-state packet race.
+  // Force a fresh state and replay reveal if needed.
+  requestFreshPlayerState();
+  requestAnimationFrame(() => {
+    replayRevealIfNeeded();
+  });
 });
 
 socket.on("join_denied", (msg) => {
@@ -1405,7 +1426,14 @@ socket.on("state", (state) => {
 // make sure the scoreboard panel catches up to the latest reveal state immediately.
 document.addEventListener("visibilitychange", () => {
   visEpoch++;
-  if (!document.hidden) requestFreshPlayerState();
+  if (!document.hidden) {
+    requestFreshPlayerState();
+    // Some mobile browsers restore sockets slightly later after foregrounding.
+    // A second hello keeps the client in sync with the current reveal state.
+    setTimeout(() => {
+      if (!document.hidden) requestFreshPlayerState();
+    }, 180);
+  }
   const s = pendingRevealState || lastState;
 
   if (document.hidden) {
@@ -1433,14 +1461,7 @@ document.addEventListener("visibilitychange", () => {
 
   // Visible again: request fresh state and replay reveal (if needed) without stale transitions.
   document.body.classList.add("noAnim");
-  if (s && s.phase === "revealed") {
-    if (playerRevealPlayedRound === s.round && !playerRevealInProgress) {
-      renderScoreboard(s, { instant: true });
-    } else {
-      closeScoreboardPanel();
-      startPlayerReveal(s);
-    }
-  } else {
+  if (!replayRevealIfNeeded(s)) {
     closeScoreboardPanel();
   }
   requestAnimationFrame(() => document.body.classList.remove("noAnim"));

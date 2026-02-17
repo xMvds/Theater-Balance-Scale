@@ -1065,6 +1065,9 @@ body.survivedTheme{
 .hostPage #resetBtn.resetPulse{
   animation: resetPulseGlow 1.15s ease-in-out infinite;
 }
+.hostPage #nextBtn.revealReadyPulse:not(:disabled){
+  animation: nextRevealPulse 1.05s ease-in-out infinite;
+}
 @keyframes resetPulseGlow{
   0%,100%{
     opacity: 0.86;
@@ -1077,6 +1080,20 @@ body.survivedTheme{
     box-shadow:
       0 0 0 1px rgba(255,255,255,0.22),
       0 0 26px rgba(255,255,255,0.18);
+  }
+}
+@keyframes nextRevealPulse{
+  0%,100%{
+    opacity: 0.88;
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,0.10),
+      0 0 0 rgba(255,255,255,0.0);
+  }
+  50%{
+    opacity: 1;
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,0.24),
+      0 0 24px rgba(255,255,255,0.20);
   }
 }
 .survivedText{

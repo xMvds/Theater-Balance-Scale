@@ -891,6 +891,12 @@ const playersTotal = state.players?.length ?? 0;
     nextBtn.disabled = isGameOver || !(state.phase === "revealed");
     devFillBtn.disabled = isGameOver || !(state.phase === "collecting");
 
+    const revealAnimDone =
+      !isGameOver &&
+      state.phase === "revealed" &&
+      Number(state.revealReadyRound || 0) === Number(state.round || 0);
+    nextBtn?.classList.toggle("revealReadyPulse", revealAnimDone);
+
     // Make reset the obvious action when the game has ended.
     resetBtn?.classList.toggle("resetPulse", isGameOver);
 
