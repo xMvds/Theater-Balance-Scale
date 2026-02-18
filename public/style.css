@@ -689,13 +689,13 @@ body.noAnim:not(.hostPage):not(.infoPage)::after{ animation: none !important; }
   justify-content:flex-start;
 }
 
-.scorePanel .tName{
+.scorePanel .tile .name{
   font-size:18px;
   letter-spacing:0.12em;
   opacity:0.85;
 }
 
-.scorePanel .tGuess{
+.scorePanel .tile .num{
   margin-top:16px;
   font-size:54px;
   text-align:center;
@@ -722,7 +722,7 @@ body.noAnim:not(.hostPage):not(.infoPage)::after{ animation: none !important; }
 }
 
 
-/* ===== Player scoreboard — mobile layout (reverted to earlier compact 3 columns) ===== */
+/* ===== Player scoreboard — mobile layout (3 columns) ===== */
 @media (max-width: 600px){
   .scorePanel .board{ padding: 0 8px; }
   .scorePanel .tiles{
@@ -737,22 +737,21 @@ body.noAnim:not(.hostPage):not(.infoPage)::after{ animation: none !important; }
     min-height:118px;
     padding:10px 10px;
   }
-  .scorePanel .tName{
+  .scorePanel .tile .name{
     font-size:12px;
     letter-spacing:0.10em;
     text-align:center;
     white-space:nowrap;
     overflow:hidden;
     text-overflow:ellipsis;
-    margin-bottom:6px;
   }
-  .scorePanel .tGuess{
+  .scorePanel .tile .num{
     margin-top:10px;
     font-size:34px;
     letter-spacing:0.02em;
-    padding:0;
   }
-  .scorePanel .tDelta{
+  .scorePanel .tile .d1,
+  .scorePanel .tile .d2{
     margin-top:6px;
     font-size:12px;
     letter-spacing:0.06em;
@@ -2052,106 +2051,103 @@ body.survivedTheme{
 
 
 
-/* ===== Info / Player reveal scene — phone layout (4 columns, per-tile header & meta) ===== */
+/* ===== Info / Player reveal scene — phone layout (aligned rows, names above tiles) ===== */
 @media (max-width: 600px){
+  /* We keep the SAME structure as desktop (names row above, scores/deltas below),
+     but we force EVERY row to wrap in the exact same way.
+     This fixes the “row 2 names don’t sit above row 2 tiles” issue AND keeps
+     the last row nicely centered (e.g. 5 players => 1 centered tile). */
+
   .infoFrame{
-    width: min(980px, 98vw);
-    height: min(980px, 96vh);
+    width: min(980px, 96vw);
+    height: min(980px, 94vh);
   }
 
   .infoScene{ gap: 12px; }
 
-  /* On phones we render names + scores inside each guess tile.
-     This prevents the "second row of names" from sitting above the first row of tiles. */
-  .infoNamesRow,
-  .infoScoresRow,
-  .infoDeltasRow{ display:none !important; }
+  /* Responsive column count (4 on most phones, 3 on very small screens). */
+  .infoScene{ --cols: 4; --colGap: 8px; --rowGap: 10px; }
+  @media (max-width: 360px){
+    .infoScene{ --cols: 3; }
+  }
 
-  .infoGuessesRow{
-    display:grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 10px 8px;
-    flex-wrap: initial;
-    justify-content: initial;
-    align-items: stretch;
-    max-width: min(760px, 96vw);
+  .infoNamesRow,
+  .infoGuessesRow,
+  .infoScoresRow,
+  .infoDeltasRow{
+    width: min(760px, 96vw);
     margin-left:auto;
     margin-right:auto;
-  }
-
-  .infoCell{ width:auto; min-width:0; }
-
-  .infoGuessTile{
-    width: 100%;
-    padding: 10px 8px;
     display:flex;
-    flex-direction:column;
+    flex-wrap:wrap;
+    justify-content:center;
     align-items:center;
-    justify-content:flex-start;
-    gap:6px;
+    gap: var(--rowGap) var(--colGap);
   }
 
-  .infoGuessTile .gName{
+  /* Let rows size themselves (no fixed reserved height on phones). */
+  .infoNamesRow,
+  .infoScoresRow,
+  .infoDeltasRow{ height:auto; min-height: 0; overflow: visible; }
+
+  /* Every cell uses the same width across all rows, so wraps line up perfectly. */
+  .infoCell{
+    width:auto;
+    min-width:0;
+    flex: 0 0 calc((100% - (var(--cols) - 1) * var(--colGap)) / var(--cols));
+    max-width: calc((100% - (var(--cols) - 1) * var(--colGap)) / var(--cols));
+    text-align:center;
+  }
+
+  /* Names ABOVE tiles */
+  .infoName{
     font-size: 12px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 100%;
-    opacity:0;
-    transform: translateY(6px);
-    transition: opacity 1800ms ease, transform 1400ms ease;
   }
-  .infoScene.s1 .infoGuessTile .gName{ opacity:1; transform: translateY(0); }
 
+  /* Guess tiles: compact & landscape */
+  .infoGuessTile{
+    width: 100%;
+    padding: 10px 6px;
+    aspect-ratio: 1.7 / 1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
   .infoGuessTile .guessNum{
     font-size: 34px;
-    line-height: 1.1;
-    margin-top:2px;
+    line-height: 1.05;
   }
 
-  .infoGuessTile .gMeta{
-    width:100%;
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    gap:2px;
-    margin-top:4px;
-    opacity:0;
-    transform: translateY(6px);
-    transition: opacity 1800ms ease, transform 1400ms ease;
-  }
-  .infoScene.s4 .infoGuessTile .gMeta{ opacity:1; transform: translateY(0); }
+  /* Score/delta rows: compact, readable */
+  .infoScore,
+  .infoDelta{ height: 18px; }
+  .infoScore .scoreNum{ font-size: 14px; font-weight: 700; }
+  .infoDelta .deltaNum{ font-size: 14px; font-weight: 700; }
 
-  /* Override the default row-based opacity/transform rules for score/delta when used inside a tile. */
-  .gMeta .infoScore,
-  .gMeta .infoDelta{
-    height:18px;
-    opacity:1;
-    transform:none;
-    transition:none;
-  }
-  .gMeta .infoScore{ overflow:hidden; }
-  .gMeta .infoScore .scoreNum{ font-size: 14px; font-weight: 700; }
-  .gMeta .infoDelta{ overflow:hidden; }
-  .gMeta .infoDelta .deltaNum{ font-size: 14px; font-weight: 700; }
+  /* Reduce the default negative row spacing for phone. */
+  .infoScoresRow,
+  .infoDeltasRow{ margin-top: -2px; }
 
-  /* Math row: keep the original 3-part layout but make it fit on phones */
-  .infoMathRow{ --mathGap: 120px; }
-  .infoScene.s2 .infoMathRow{ height: 96px; margin-top: 8px; transform: translateY(-22px); }
-  .bigMath{ width: 40vw; max-width: 180px; padding: 10px 8px; }
+  /* Math row: smaller so it doesn't touch the edges. */
+  .infoMathRow{ --mathGap: 110px; }
+  .infoScene.s2 .infoMathRow{ height: 92px; margin-top: 8px; transform: translateY(-18px); }
+  .bigMath{ width: 40vw; max-width: 160px; padding: 10px 8px; }
   .bigMathOp{ font-size: 18px; }
   .infoMathRow .mathValue{ font-size: 22px; }
   .mathLabel{ font-size: 10px; letter-spacing:0.14em; }
 }
 
 @media (max-width: 360px){
-  .infoGuessesRow{ gap: 8px 6px; }
-
+  .infoGuessTile{ aspect-ratio: 1.6 / 1; }
   .infoGuessTile .guessNum{ font-size: 30px; }
-  .infoMathRow{ --mathGap: 108px; }
-  .bigMath{ max-width: 165px; }
+
+  .infoMathRow{ --mathGap: 100px; }
+  .bigMath{ max-width: 150px; }
   .bigMathOp{ font-size: 16px; }
   .infoMathRow .mathValue{ font-size: 20px; }
 }

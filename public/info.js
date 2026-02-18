@@ -282,7 +282,7 @@ function computeNewRuleLines(state) {
 function buildRevealScene(state, opts = {}) {
   const instant = !!opts.instant;
   const startAtMs = Math.max(0, Number(opts.startAtMs || 0));
-  const phoneLayout = !!(window.matchMedia && window.matchMedia("(max-width: 600px)").matches);
+  const phoneLayout = false;
   clearAnimTimers();
 
   // reset classes

@@ -18,7 +18,7 @@ document.addEventListener("DOMContentLoaded", () => {
   document.body.classList.remove("hostLocked");
 
 // Build/version label (shown bottom-left)
-const BUILD_VERSION = 'v3.0.0.84';
+const BUILD_VERSION = 'v3.0.0.85';
 const buildVersionEl = document.getElementById('buildVersion');
 if (buildVersionEl) buildVersionEl.textContent = BUILD_VERSION;
 

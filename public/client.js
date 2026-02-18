@@ -943,7 +943,7 @@ function prAnimateScoreNumber(el, from, to, isBad) {
 
 function prBuildRevealScene(state, opts = {}) {
   const instant = !!opts.instant;
-  const phoneLayout = !!(window.matchMedia && window.matchMedia("(max-width: 600px)").matches);
+  const phoneLayout = false;
   if (!infoScene) return { start: () => {}, duration: 0 };
 
   // reset classes
