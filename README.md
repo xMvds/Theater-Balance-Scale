@@ -7,6 +7,8 @@ A real‑time, browser-based party game inspired by **“Balance Scale”** from
 
 Players pick a number from **0–100**. After everyone confirms, the game reveals results with a cinematic animation and updates scores.
 
+For a full technical + product overview (the “startcontext” used across chats), see: **PROJECT_SNAPSHOT.md**.
+
 ---
 
 ## Screens

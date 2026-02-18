@@ -627,6 +627,14 @@ socket.on("join", ({ name, playerKey }) => {
     if (game.gameOver) return;
     if (game.phase !== "revealed") return;
 
+    // IMPORTANT UX:
+    // - While the reveal is still running, "Next" acts as SKIP/UNLOCK (open score panels immediately)
+    // - Only after the reveal is ready, "Next" advances to the next round.
+    if (game.revealReadyRound !== game.round) {
+      markRevealReady(game.round);
+      return;
+    }
+
     game.phase = "collecting";
     game.round += 1;
 
@@ -636,6 +644,7 @@ socket.on("join", ({ name, playerKey }) => {
 
     broadcastState();
   });
+
 
   
 
