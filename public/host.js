@@ -17,6 +17,11 @@ document.addEventListener("DOMContentLoaded", () => {
   // Unlock host UI only after access code is accepted
   document.body.classList.remove("hostLocked");
 
+// Build/version label (shown bottom-left)
+const BUILD_VERSION = 'v3.0.0.83';
+const buildVersionEl = document.getElementById('buildVersion');
+if (buildVersionEl) buildVersionEl.textContent = BUILD_VERSION;
+
 const socket = io();
 
 // Simple server clock sync (state.serverNow is sent by server)

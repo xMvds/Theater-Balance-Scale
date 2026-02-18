@@ -208,6 +208,7 @@ let playerRuleIntroInProgress = false;
 let playerRuleIntroPlayedRound = null;
 let playerRuleIntroTimers = [];
 let priShownAt = 0;
+const PRI_BG_IN_MS = 650;
 const PRI_SHOW_MS = 3000;
 const PRI_FADE_MS = 5000;
 
@@ -704,8 +705,11 @@ function priSetTimeout(fn, ms) {
 function priHideRoundRulesOverlay() {
   if (!playerRevealRoundRules) return;
   playerRevealRoundRules.classList.add("hidden");
-  playerRevealRoundRules.classList.remove("show");
-  playerRevealRoundRules.classList.remove("fadeOut");
+  playerRevealRoundRules.classList.remove("showBg","textOn","fadeOut");
+  try{
+    playerRevealRoundRules.style.removeProperty("--rrFadeOutMs");
+    playerRevealRoundRules.style.removeProperty("--rrFadeInMs");
+  }catch(e){}
   playerRevealRoundRules.innerHTML = "";
   priShownAt = 0;
 }
@@ -718,16 +722,23 @@ function priShowRoundRulesOverlayFromLines(lines) {
   }
 
   playerRevealRoundRules.innerHTML = `
-    <div class="rrTitle">Nieuwe Regel</div>
-    <div class="rrBig">
-      ${lines.map((t) => `<div class="rrLine">${t}</div>`).join("")}
+    <div class="rrContent">
+      <div class="rrTitle">Nieuwe Regel</div>
+      <div class="rrBig">
+        ${lines.map((t) => `<div class="rrLine">${t}</div>`).join("")}
+      </div>
     </div>
   `;
 
   playerRevealRoundRules.classList.remove("hidden");
-  playerRevealRoundRules.classList.remove("fadeOut");
-  playerRevealRoundRules.classList.remove("show");
-  requestAnimationFrame(() => requestAnimationFrame(() => playerRevealRoundRules.classList.add("show")));
+  playerRevealRoundRules.classList.remove("showBg","textOn","fadeOut");
+  try{
+    playerRevealRoundRules.style.removeProperty("--rrFadeOutMs");
+    playerRevealRoundRules.style.removeProperty("--rrFadeInMs");
+  }catch(e){}
+
+  // Fade black in first (CSS pseudo-element)
+  requestAnimationFrame(() => playerRevealRoundRules.classList.add("showBg"));
 
   // Robust timing: store start time so we can re-arm after background/sleep.
   priShownAt = Date.now();
@@ -746,34 +757,61 @@ function priArmHideTimers() {
 
   const now = Date.now();
   const elapsed = (priShownAt ? (now - priShownAt) : 0);
-  const total = PRI_SHOW_MS + PRI_FADE_MS;
+  const total = PRI_BG_IN_MS + PRI_SHOW_MS + PRI_FADE_MS;
 
   if (elapsed >= total) {
     priHideRoundRulesOverlay();
     return;
   }
 
-  // Ensure we are in the correct fade phase.
-  if (elapsed >= PRI_SHOW_MS) {
-    playerRevealRoundRules.classList.add("fadeOut");
-    playerRevealRoundRules.style.transition = "opacity " + PRI_FADE_MS + "ms ease";
-    priSetTimeout(() => { priHideRoundRulesOverlay(); }, Math.max(0, total - elapsed));
+  // Always ensure the background is on.
+  playerRevealRoundRules.classList.add("showBg");
+
+  // Phase 1: background fading in, text still hidden.
+  if (elapsed < PRI_BG_IN_MS) {
+    playerRevealRoundRules.classList.remove("textOn","fadeOut");
+
+    priSetTimeout(() => {
+      if (!playerRevealRoundRules || playerRevealRoundRules.classList.contains("hidden")) return;
+      playerRevealRoundRules.classList.add("textOn");
+    }, Math.max(0, PRI_BG_IN_MS - elapsed));
+
+    priSetTimeout(() => {
+      if (!playerRevealRoundRules || playerRevealRoundRules.classList.contains("hidden")) return;
+      playerRevealRoundRules.classList.add("fadeOut");
+    }, Math.max(0, (PRI_BG_IN_MS + PRI_SHOW_MS) - elapsed));
+
+    priSetTimeout(() => { priHideRoundRulesOverlay(); }, Math.max(0, total - elapsed) + 80);
     return;
   }
 
-  // Not fading yet: schedule fade + hide.
-  playerRevealRoundRules.classList.remove("fadeOut");
-  playerRevealRoundRules.style.transition = "opacity 1200ms ease";
+  // Phase 2: text is visible (pops in instantly).
+  playerRevealRoundRules.classList.add("textOn");
 
-  priSetTimeout(() => {
-    if (!playerRevealRoundRules) return;
-    playerRevealRoundRules.classList.add("fadeOut");
-    playerRevealRoundRules.style.transition = "opacity " + PRI_FADE_MS + "ms ease";
-  }, Math.max(0, PRI_SHOW_MS - elapsed));
+  if (elapsed < (PRI_BG_IN_MS + PRI_SHOW_MS)) {
+    playerRevealRoundRules.classList.remove("fadeOut");
 
-  priSetTimeout(() => {
-    priHideRoundRulesOverlay();
-  }, Math.max(0, total - elapsed));
+    priSetTimeout(() => {
+      if (!playerRevealRoundRules || playerRevealRoundRules.classList.contains("hidden")) return;
+      playerRevealRoundRules.classList.add("fadeOut");
+    }, Math.max(0, (PRI_BG_IN_MS + PRI_SHOW_MS) - elapsed));
+
+    priSetTimeout(() => { priHideRoundRulesOverlay(); }, Math.max(0, total - elapsed) + 80);
+    return;
+  }
+
+  // Phase 3: fading out.
+  const remaining = Math.max(120, total - elapsed);
+  try{ playerRevealRoundRules.style.setProperty('--rrFadeOutMs', remaining + 'ms'); }catch(e){}
+
+  // Restart fade transition with the remaining duration (so it never gets stuck after background).
+  playerRevealRoundRules.classList.remove('fadeOut');
+  requestAnimationFrame(() => {
+    if (!playerRevealRoundRules || playerRevealRoundRules.classList.contains('hidden')) return;
+    playerRevealRoundRules.classList.add('fadeOut');
+  });
+
+  priSetTimeout(() => { priHideRoundRulesOverlay(); }, remaining + 120);
 }
 
 function priComputeNewRuleLines(state) {
@@ -857,14 +895,16 @@ function startPlayerRuleIntro(state) {
     priShowRoundRulesOverlayFromLines(lines);
 
     // When the rules overlay is done, fade back to the player UI
+    const PRI_TOTAL_MS = PRI_BG_IN_MS + PRI_SHOW_MS + PRI_FADE_MS;
+
     priSetTimeout(() => {
       if (!playerRevealInProgress) prSetBlack(false);
-    }, 8000);
+    }, PRI_TOTAL_MS + 80);
 
     priSetTimeout(() => {
       if (!playerRevealInProgress) prHideOverlay();
       playerRuleIntroInProgress = false;
-    }, 8000 + 460);
+    }, PRI_TOTAL_MS + 80 + 460);
   }, 1000);
 }
 
@@ -1818,7 +1858,7 @@ try {
 } catch (e) {}
 
   // If the rule overlay is currently visible, re-arm its hide timers now.
-  try { if (!document.hidden && playerRevealRoundRules && !playerRevealRoundRules.classList.contains("hidden") && playerRevealRoundRules.classList.contains("show")) { priArmHideTimers(); } } catch(e) {}
+  try { if (!document.hidden && playerRevealRoundRules && !playerRevealRoundRules.classList.contains("hidden") && playerRevealRoundRules.classList.contains("showBg")) { priArmHideTimers(); } } catch(e) {}
 
 // Re-enable animations (unless startPlayerReveal(resumeNoFade) already did it).
 if (!deferNoAnimRemoval) {

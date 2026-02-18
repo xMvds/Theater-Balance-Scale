@@ -180,10 +180,9 @@ function animateDeltaNumber(el, delta) {
 }
 
 function hideRoundRulesOverlay() {
-  roundRulesEl.classList.add("hidden");
-  roundRulesEl.classList.remove("show");
-  roundRulesEl.classList.remove("fadeOut");
-  roundRulesEl.innerHTML = "";
+  roundRulesEl.classList.add('hidden');
+  roundRulesEl.classList.remove('showBg','textOn','fadeOut');
+  roundRulesEl.innerHTML = '';
 }
 
 function showRoundRulesOverlayFromLines(lines) {
@@ -192,28 +191,42 @@ function showRoundRulesOverlayFromLines(lines) {
     return;
   }
 
+  const BG_IN_MS = 650;
+  const SHOW_MS = 3000;
+  const FADE_MS = 5000;
+
   roundRulesEl.innerHTML = `
-    <div class="rrTitle">Nieuwe Regel</div>
-    <div class="rrBig">
-      ${lines.map((t) => `<div class="rrLine">${t}</div>`).join("")}
+    <div class="rrContent">
+      <div class="rrTitle">Nieuwe Regel</div>
+      <div class="rrBig">
+        ${lines.map((t) => `<div class="rrLine">${t}</div>`).join("")}
+      </div>
     </div>
   `;
 
-  roundRulesEl.classList.remove("hidden");
-  roundRulesEl.classList.remove("fadeOut");
-  requestAnimationFrame(() => roundRulesEl.classList.add("show"));
+  roundRulesEl.classList.remove('hidden');
+  roundRulesEl.classList.remove('showBg','textOn','fadeOut');
+
+  // Fade the black screen in first...
+  requestAnimationFrame(() => roundRulesEl.classList.add('showBg'));
 
   clearTimeout(showRoundRulesOverlayFromLines._t1);
   clearTimeout(showRoundRulesOverlayFromLines._t2);
+  clearTimeout(showRoundRulesOverlayFromLines._t3);
 
-  // 10 seconden zichtbaar, dan langzaam weg
+  // ...then pop the text in (no fade-in)
   showRoundRulesOverlayFromLines._t1 = setTimeout(() => {
-    roundRulesEl.classList.add("fadeOut");
-  }, 10000);
+    roundRulesEl.classList.add('textOn');
+  }, BG_IN_MS);
 
+  // Hold for 3s, then fade BOTH bg + text out together
   showRoundRulesOverlayFromLines._t2 = setTimeout(() => {
+    roundRulesEl.classList.add('fadeOut');
+  }, BG_IN_MS + SHOW_MS);
+
+  showRoundRulesOverlayFromLines._t3 = setTimeout(() => {
     hideRoundRulesOverlay();
-  }, 11200);
+  }, BG_IN_MS + SHOW_MS + FADE_MS + 80);
 }
 
 function showStage() {

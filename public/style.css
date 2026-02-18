@@ -782,6 +782,7 @@ body.noAnim:not(.hostPage):not(.infoPage)::after{ animation: none !important; }
 /* ===== END mobile scoreboard ===== */
 
 
+
 /* ===== Grid ===== */
 .gridWrap{
   width:100%;
@@ -1133,7 +1134,7 @@ body.deadTheme .playerPanel{
   content:"";
   position:absolute;
   inset:-6%;
-  background-image: url("dead_glass_spider.png");
+  background-image: url("dead_glass_gen.svg");
   background-repeat:no-repeat;
   background-size: cover;
   background-position: 50% 50%;
@@ -1432,7 +1433,6 @@ body.survivedTheme{
 .playerRevealOverlay .infoRoundRules{
   position:fixed;
   inset:0;
-  transition: opacity 1200ms ease;
 }
 
 
@@ -1491,7 +1491,7 @@ body.survivedTheme{
 }
 .infoTiles .tScoreWrap{ height:28px; }
 
-/* Round rules overlay — groot, geen vakje */
+/* Round rules overlay — cinematic: bg fades in, text pops in, then both fade out */
 .infoRoundRules{
   position:fixed;
   inset:0;
@@ -1500,15 +1500,38 @@ body.survivedTheme{
   align-items:center;
   justify-content:center;
   padding:40px;
-  background: rgba(0,0,0,0.86);
   color: rgba(255,255,255,0.94);
   pointer-events:none;
-  opacity:0;
-  transition: opacity 1200ms ease;
+  z-index: 9999;
 }
-.infoRoundRules.show{ opacity:1; }
-.infoRoundRules.fadeOut{ opacity:0; }
+.infoRoundRules::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:#000;
+  opacity:0;
+  transition: opacity var(--rrFadeInMs, 650ms) ease;
+}
+/* background fade-in */
+.infoRoundRules.showBg::before{ opacity:0.86; }
 
+/* Text is inserted inside .rrContent. It should pop in (no fade) */
+.infoRoundRules .rrContent{
+  position:relative;
+  visibility:hidden;
+  opacity:1;
+}
+.infoRoundRules.textOn .rrContent{ visibility:visible; }
+
+/* Fade out BOTH bg + text together */
+.infoRoundRules.fadeOut::before{
+  opacity:0;
+  transition: opacity var(--rrFadeOutMs, 5000ms) ease;
+}
+.infoRoundRules.fadeOut .rrContent{
+  opacity:0;
+  transition: opacity var(--rrFadeOutMs, 5000ms) ease;
+}
 .infoRoundRules .rrTitle{
   font-size:44px;
   letter-spacing:0.26em;
@@ -2043,3 +2066,100 @@ body.survivedTheme{
   line-height:1.35;
 }
 
+
+
+
+/* ===== Info / Player reveal scene — phone layout (4 columns) ===== */
+@media (max-width: 600px){
+  .infoFrame{
+    width: min(980px, 98vw);
+    height: min(980px, 96vh);
+  }
+
+  .infoScene{ gap: 12px; }
+
+  .infoNamesRow,
+  .infoGuessesRow,
+  .infoScoresRow,
+  .infoDeltasRow{
+    display:grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px 8px;
+    flex-wrap: initial;
+    justify-content: initial;
+    align-items: stretch;
+    max-width: min(760px, 96vw);
+    margin-left:auto;
+    margin-right:auto;
+  }
+
+  /* Allow multi-row wrapping without clipping on phones */
+  .infoNamesRow,
+  .infoScoresRow,
+  .infoDeltasRow{
+    height:auto;
+    overflow:visible;
+  }
+
+  .infoCell{ width:auto; min-width:0; }
+
+  .infoName{
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .infoGuessTile{
+    width: 100%;
+    padding: 10px 8px;
+  }
+  .infoGuessTile .guessNum{
+    font-size: 34px;
+    line-height: 1.1;
+  }
+
+  .infoScore{ height:18px; }
+  .infoScore .scoreNum{ font-size: 14px; font-weight: 700; }
+
+  .infoDelta{ height:18px; }
+  .infoDelta .deltaNum{ font-size: 14px; }
+
+  .infoScoresRow,
+  .infoDeltasRow{ margin-top:-6px; }
+
+  /* Math row: keep the original 3-part layout but make it fit on phones */
+  .infoMathRow{ --mathGap: 120px; }
+  .infoScene.s2 .infoMathRow{ height: 96px; margin-top: 8px; transform: translateY(-22px); }
+  .bigMath{ width: 40vw; max-width: 180px; padding: 10px 8px; }
+  .bigMathOp{ font-size: 18px; }
+  .infoMathRow .mathValue{ font-size: 22px; }
+  .mathLabel{ font-size: 10px; letter-spacing:0.14em; }
+}
+
+@media (max-width: 360px){
+  .infoNamesRow,
+  .infoGuessesRow,
+  .infoScoresRow,
+  .infoDeltasRow{ gap: 8px 6px; }
+
+  .infoGuessTile .guessNum{ font-size: 30px; }
+  .infoMathRow{ --mathGap: 108px; }
+  .bigMath{ max-width: 165px; }
+  .bigMathOp{ font-size: 16px; }
+  .infoMathRow .mathValue{ font-size: 20px; }
+}
+/* ===== END phone reveal scene ===== */
+/* Host build version */
+.hostPage .buildVersion{
+  position:fixed;
+  left:12px;
+  bottom:10px;
+  font-size:11px;
+  letter-spacing:0.12em;
+  color: rgba(255,255,255,0.45);
+  text-transform:uppercase;
+  pointer-events:none;
+  z-index: 60;
+}
