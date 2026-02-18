@@ -128,6 +128,9 @@ let visEpoch = 0; // v53A: visibility token to prevent delayed animations
 
 
 let lastScores = new Map();
+// Track previous totals so score animations animate from the last shown value (not a fixed placeholder)
+let prevScoresById = new Map();
+
 // Avoid replaying the grid cascade after a refresh mid-game.
 // Persist per-tab (sessionStorage) and clear when returning to lobby.
 const SS_CASCADE_KEY = "tbs_did_cascade";
@@ -204,12 +207,17 @@ let overlayPrevScores = new Map();
 let playerRuleIntroInProgress = false;
 let playerRuleIntroPlayedRound = null;
 let playerRuleIntroTimers = [];
+let priShownAt = 0;
+const PRI_SHOW_MS = 3000;
+const PRI_FADE_MS = 5000;
+
 
 // Keep rule-intro logic identical to /info.html: we detect which rules became active
 // compared to the previous round and show the "Nieuwe Regel" overlay for those.
 let priPrevActiveRules = { r1: false, r2: false, r3: false };
 let priDelayTimer = null;
 let priDelayRound = null;
+let priPendingIntro = null; // { round, lines } when tab was hidden
 
 const SS_KEY = "tbs_player_key";
 function getPlayerKey() {
@@ -281,7 +289,7 @@ const SCORE_PANEL_OPEN_MS = 1300;
 const SCORE_PANEL_CONTENT_FADE_MS = 750;
 const SCORE_PANEL_CONTENT_HIDE_MS = 420;
 // User tweak: dead screen should kick in a bit BEFORE the scoreboard finishes.
-const DEAD_SCREEN_EARLY_MS = 1000;
+const DEAD_SCREEN_EARLY_MS = 1400; // v3.0.0.81: 0.4s earlier
 
 function buildGrid() {
   grid.innerHTML = "";
@@ -683,10 +691,10 @@ function priClearTimers() {
 }
 
 function priSetTimeout(fn, ms) {
-  const __epoch = visEpoch;
+  // Timers are heavily throttled in background tabs.
+  // For the rule overlay we prefer correctness over "no replay":
+  // when the tab returns, late timers should still advance the overlay and hide it.
   const tid = setTimeout(() => {
-    if (__epoch !== visEpoch) return;
-    if (document.hidden) return;
     fn();
   }, ms);
   playerRuleIntroTimers.push(tid);
@@ -699,6 +707,7 @@ function priHideRoundRulesOverlay() {
   playerRevealRoundRules.classList.remove("show");
   playerRevealRoundRules.classList.remove("fadeOut");
   playerRevealRoundRules.innerHTML = "";
+  priShownAt = 0;
 }
 
 function priShowRoundRulesOverlayFromLines(lines) {
@@ -720,15 +729,51 @@ function priShowRoundRulesOverlayFromLines(lines) {
   playerRevealRoundRules.classList.remove("show");
   requestAnimationFrame(() => requestAnimationFrame(() => playerRevealRoundRules.classList.add("show")));
 
-  // Match /info.html timing: show ~10s, then fade text, then hide.
+  // Robust timing: store start time so we can re-arm after background/sleep.
+  priShownAt = Date.now();
+  priArmHideTimers();
+}
+
+
+function priArmHideTimers() {
+  if (!playerRevealRoundRules) return;
+
+  // Restart timers robustly (timers may be throttled/paused while backgrounded).
+  priClearTimers();
+
+  // If somehow not visible anymore, bail.
+  if (playerRevealRoundRules.classList.contains("hidden")) return;
+
+  const now = Date.now();
+  const elapsed = (priShownAt ? (now - priShownAt) : 0);
+  const total = PRI_SHOW_MS + PRI_FADE_MS;
+
+  if (elapsed >= total) {
+    priHideRoundRulesOverlay();
+    return;
+  }
+
+  // Ensure we are in the correct fade phase.
+  if (elapsed >= PRI_SHOW_MS) {
+    playerRevealRoundRules.classList.add("fadeOut");
+    playerRevealRoundRules.style.transition = "opacity " + PRI_FADE_MS + "ms ease";
+    priSetTimeout(() => { priHideRoundRulesOverlay(); }, Math.max(0, total - elapsed));
+    return;
+  }
+
+  // Not fading yet: schedule fade + hide.
+  playerRevealRoundRules.classList.remove("fadeOut");
+  playerRevealRoundRules.style.transition = "opacity 1200ms ease";
+
   priSetTimeout(() => {
     if (!playerRevealRoundRules) return;
     playerRevealRoundRules.classList.add("fadeOut");
-  }, 10000);
+    playerRevealRoundRules.style.transition = "opacity " + PRI_FADE_MS + "ms ease";
+  }, Math.max(0, PRI_SHOW_MS - elapsed));
 
   priSetTimeout(() => {
     priHideRoundRulesOverlay();
-  }, 11200);
+  }, Math.max(0, total - elapsed));
 }
 
 function priComputeNewRuleLines(state) {
@@ -760,6 +805,7 @@ function stopPlayerRuleIntro() {
     priDelayTimer = null;
   }
   priDelayRound = null;
+  priPendingIntro = null;
   priClearTimers();
   playerRuleIntroInProgress = false;
   priHideRoundRulesOverlay();
@@ -785,9 +831,9 @@ function startPlayerRuleIntro(state) {
   const lines = priComputeNewRuleLines(state);
   if (!lines.length) return;
 
-  // If hidden, don't animate — just mark as shown.
+  // If hidden, queue it and show when the tab becomes visible again.
   if (document.hidden) {
-    playerRuleIntroPlayedRound = state.round;
+    priPendingIntro = { round: state.round, lines };
     return;
   }
 
@@ -813,12 +859,12 @@ function startPlayerRuleIntro(state) {
     // When the rules overlay is done, fade back to the player UI
     priSetTimeout(() => {
       if (!playerRevealInProgress) prSetBlack(false);
-    }, 11200);
+    }, 8000);
 
     priSetTimeout(() => {
       if (!playerRevealInProgress) prHideOverlay();
       playerRuleIntroInProgress = false;
-    }, 11200 + 460);
+    }, 8000 + 460);
   }, 1000);
 }
 
@@ -1016,19 +1062,38 @@ function prBuildRevealScene(state, opts = {}) {
   return { start, duration: 10300 };
 }
 
+let prHideTimer = null;
+
 function prHideOverlay() {
   if (!playerRevealOverlay) return;
-  playerRevealOverlay.classList.add("hidden");
+
+  // Soft-hide: fade out instead of hard-cut (important when skipping the scoreboard animation).
+  clearTimeout(prHideTimer);
+
+  // If already hidden, nothing to do.
+  if (playerRevealOverlay.classList.contains("hidden")) {
+    playerRevealOverlay.classList.remove("black","showStage","hiding");
+    playerRevealOverlay.setAttribute("aria-hidden", "true");
+    return;
+  }
+
+  playerRevealOverlay.classList.add("hiding");
   playerRevealOverlay.classList.remove("black","showStage");
   playerRevealOverlay.setAttribute("aria-hidden", "true");
+
+  prHideTimer = setTimeout(() => {
+    playerRevealOverlay.classList.add("hidden");
+    playerRevealOverlay.classList.remove("hiding");
+  }, 560);
 }
 
 function prShowOverlay() {
   if (!playerRevealOverlay) return;
+  clearTimeout(prHideTimer);
   playerRevealOverlay.classList.remove("hidden");
+  playerRevealOverlay.classList.remove("hiding");
   playerRevealOverlay.setAttribute("aria-hidden", "false");
 }
-
 function prSetBlack(on) {
   if (!playerRevealOverlay) return;
   if (on) {
@@ -1265,10 +1330,14 @@ function renderScoreboard(state, opts = {}) {
 
     // Animate total score ONLY when delta < 0 (same behavior as other screens)
     if (shouldAnimateScores && deltaVal < 0) {
-      const fromScore = (typeof p.prevScore === "number")
-        ? p.prevScore
-        : (baseScore - deltaVal); // deltaVal is negative
-            const animDelay = (openingNow ? (PANEL_OPEN_MS + 380) : 180) + (i * 40);
+      // Animate from the last known total (fixes '-1 -> total' bug)
+      const prevKnown = (p && typeof p.id === "string" && prevScoresById && prevScoresById.has(p.id))
+        ? prevScoresById.get(p.id)
+        : null;
+      const fromScore = (typeof prevKnown === "number")
+        ? prevKnown
+        : ((typeof p.prevScore === "number") ? p.prevScore : (baseScore - deltaVal)); // deltaVal is negative
+      const animDelay = (openingNow ? (PANEL_OPEN_MS + 380) : 180) + (i * 40);
       animateScore(scoreWrap, fromScore, baseScore, true, animDelay);
     }
   }
@@ -1395,7 +1464,21 @@ socket.on("kicked", () => {
 });
 
 socket.on("state", (state) => {
+  const __prevState = lastState;
   lastState = state;
+  // capture previous totals for proper score animations
+  try {
+    if (__prevState && Array.isArray(__prevState.players)) {
+      const m = new Map();
+      for (const p of __prevState.players) {
+        if (p && typeof p.id === "string" && typeof p.score === "number") m.set(p.id, p.score);
+      }
+      prevScoresById = m;
+    } else {
+      prevScoresById = new Map();
+    }
+  } catch (e) {}
+
   updateServerClock(state);
 
   // Optional: host can live-edit FinisherHeader configs (modes C/D)
@@ -1709,9 +1792,41 @@ if (hasJoined) {
   try { socket.emit("join", { name: "", playerKey: getPlayerKey() }); } catch {}
 }
 
-  if (!deferNoAnimRemoval) {
-    requestAnimationFrame(() => document.body.classList.remove("noAnim"));
+// If a new rule intro was queued while the tab was hidden, show it now (player reveal mode only).
+try {
+  if (!document.hidden && priPendingIntro && lastState && lastState.phase === "collecting" && lastState.round === priPendingIntro.round && (lastState.infoClientCount || 0) === 0) {
+    const pending = priPendingIntro;
+    priPendingIntro = null;
+
+    // Don't interfere with the reveal timeline
+    if (!playerRevealInProgress && !playerRuleIntroInProgress && playerRuleIntroPlayedRound !== pending.round) {
+      playerRuleIntroPlayedRound = pending.round;
+      playerRuleIntroInProgress = true;
+      priDelayRound = pending.round;
+
+      priHideRoundRulesOverlay();
+      prShowOverlay();
+      playerRevealOverlay.classList.remove("showStage");
+      prSetBlack(true);
+      priShowRoundRulesOverlayFromLines(pending.lines);
+
+      // Fade back after total duration
+      priSetTimeout(() => { if (!playerRevealInProgress) prSetBlack(false); }, 8000);
+      priSetTimeout(() => { if (!playerRevealInProgress) prHideOverlay(); playerRuleIntroInProgress = false; }, 8460);
+    }
   }
+} catch (e) {}
+
+  // If the rule overlay is currently visible, re-arm its hide timers now.
+  try { if (!document.hidden && playerRevealRoundRules && !playerRevealRoundRules.classList.contains("hidden") && playerRevealRoundRules.classList.contains("show")) { priArmHideTimers(); } } catch(e) {}
+
+// Re-enable animations (unless startPlayerReveal(resumeNoFade) already did it).
+if (!deferNoAnimRemoval) {
+  requestAnimationFrame(() => requestAnimationFrame(() => document.body.classList.remove("noAnim")));
+} else {
+  // Safety fallback in case the overlay didn't remove it (shouldn't happen).
+  setTimeout(() => document.body.classList.remove("noAnim"), 250);
+}
 
 });
 

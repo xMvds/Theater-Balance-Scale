@@ -689,13 +689,13 @@ body.noAnim:not(.hostPage):not(.infoPage)::after{ animation: none !important; }
   justify-content:flex-start;
 }
 
-.scorePanel .tile .name{
+.scorePanel .tName{
   font-size:18px;
   letter-spacing:0.12em;
   opacity:0.85;
 }
 
-.scorePanel .tile .num{
+.scorePanel .tGuess{
   margin-top:16px;
   font-size:54px;
   text-align:center;
@@ -722,46 +722,65 @@ body.noAnim:not(.hostPage):not(.infoPage)::after{ animation: none !important; }
 }
 
 
-/* ===== Player scoreboard — mobile layout (3 columns) ===== */
+/* ===== Player scoreboard — mobile layout (4 columns) ===== */
 @media (max-width: 600px){
-  .scorePanel .board{ padding: 0 8px; }
+  .scorePanel .board{ padding: 0 6px; }
   .scorePanel .tiles{
     display:grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap:8px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap:6px;
     justify-content:stretch;
     align-items:stretch;
   }
   .scorePanel .tile{
     width:auto;
-    min-height:118px;
-    padding:10px 10px;
+    min-height:104px;
+    padding:8px 8px;
   }
-  .scorePanel .tile .name{
-    font-size:12px;
-    letter-spacing:0.10em;
+
+  /* Ensure the correct elements are targeted (tile markup uses tName/tGuess/scoreNum/tDelta) */
+  .scorePanel .tName{
+    font-size:11px;
+    letter-spacing:0.08em;
     text-align:center;
     white-space:nowrap;
     overflow:hidden;
     text-overflow:ellipsis;
+    margin-bottom:6px;
   }
-  .scorePanel .tile .num{
-    margin-top:10px;
-    font-size:34px;
-    letter-spacing:0.02em;
+  .scorePanel .tGuess{
+    font-size:18px;
+    letter-spacing:0.04em;
+    padding:4px 0 6px;
   }
-  .scorePanel .tile .d1,
-  .scorePanel .tile .d2{
+  .scorePanel .tScoreWrap{ margin-top:2px; }
+  .scorePanel .scoreNum{
+    font-size:24px;
+    line-height:1;
+  }
+  .scorePanel .tDelta{
     margin-top:6px;
-    font-size:12px;
+    font-size:11px;
     letter-spacing:0.06em;
   }
+
   .scorePanel .mathRow{
     margin-top:12px;
-    font-size:16px;
+    font-size:15px;
   }
 }
+
+/* Extra-tight phones */
+@media (max-width: 360px){
+  .scorePanel .tiles{ gap:5px; }
+  .scorePanel .tile{ min-height:96px; padding:7px 7px; }
+  .scorePanel .tName{ font-size:10px; }
+  .scorePanel .tGuess{ font-size:16px; }
+  .scorePanel .scoreNum{ font-size:22px; }
+  .scorePanel .tDelta{ font-size:10px; }
+}
 /* ===== END mobile scoreboard ===== */
+
 
 /* ===== Grid ===== */
 .gridWrap{
@@ -1371,6 +1390,11 @@ body.survivedTheme{
   pointer-events:auto; /* block taps during reveal */
 }
 .playerRevealOverlay.hidden{ display:none; }
+.playerRevealOverlay.hiding{ pointer-events:none; }
+.playerRevealOverlay.hiding .playerRevealBlackout{ opacity:0; transition: opacity 520ms ease; }
+.playerRevealOverlay.hiding .playerRevealStage{ opacity:0; transition: opacity 520ms ease, box-shadow 520ms ease; }
+.playerRevealOverlay.hiding .infoRoundRules{ opacity:0; transition: opacity 520ms ease; }
+
 .playerRevealBlackout{
   position:absolute;
   inset:0;
@@ -1476,6 +1500,7 @@ body.survivedTheme{
   align-items:center;
   justify-content:center;
   padding:40px;
+  background: rgba(0,0,0,0.86);
   color: rgba(255,255,255,0.94);
   pointer-events:none;
   opacity:0;
@@ -1676,12 +1701,6 @@ body.survivedTheme{
   clip-path: inset(0 100% 0 0);
   transition: clip-path 1200ms ease, opacity 600ms ease;
 }
-
-
-
-  to  { clip-path: inset(0 0 0 0); opacity:1; }
-}
-
 .infoScene.ready .infoGuessesRow{ /* keep stable layout */ }
 
 .infoScene.s1 .infoGuessTile{

@@ -39,13 +39,14 @@ function revealElapsedMs(state){
 function updateNextVisual(state){
   if (!nextBtn) return;
 
-  // If the host doesn't receive any more state packets after the reveal has finished,
-  // we still want the button to flip from red -> green based on time.
-  // So we schedule a one-shot refresh when needed.
+  // Keep the host button reactive even if no further state packets arrive.
   if (window.__tbsNextVisualTimer) {
     clearTimeout(window.__tbsNextVisualTimer);
     window.__tbsNextVisualTimer = null;
   }
+
+  // Default label
+  const DEFAULT_LABEL = "Next";
 
   // Reset styling
   nextBtn.classList.remove("nextLocked", "nextReady", "nextWaiting");
@@ -53,47 +54,54 @@ function updateNextVisual(state){
 
   const isGameOver = !!state?.gameOver;
   if (isGameOver) {
+    nextBtn.textContent = DEFAULT_LABEL;
     return;
   }
 
-  if (state?.phase !== "revealed") return;
+  // Only show countdown styling during revealed
+  if (state?.phase !== "revealed") {
+    nextBtn.textContent = DEFAULT_LABEL;
+    return;
+  }
 
-  const revealDur = (typeof state.revealDurationMs === "number" && Number.isFinite(state.revealDurationMs))
-    ? state.revealDurationMs
-    : 0;
-
+  const HOST_SCOREBOARD_LOCK_MS = 1400; // keep in sync with player/info unfold window
   const now = serverNow();
-  const revealReady = (state.revealReadyRound === state.round);
 
-  // Red while any reveal/scoreboard animations are still running.
-  if (!revealReady){
-    nextBtn.classList.add("nextLocked");
-    nextBtn.setAttribute("title", "Reveal animatie loopt nog…");
-    return;
-  }
-
-  const HOST_SCOREBOARD_LOCK_MS = 1400;
-
+  // Prefer deterministic timing, even if reveal_ready packets were missed.
+  const rs = (typeof state.revealStartedAt === "number" && Number.isFinite(state.revealStartedAt)) ? state.revealStartedAt : null;
+  const dur = (typeof state.revealDurationMs === "number" && Number.isFinite(state.revealDurationMs)) ? state.revealDurationMs : null;
   const readyAt = (typeof state.revealReadyAt === "number" && Number.isFinite(state.revealReadyAt))
     ? state.revealReadyAt
-    : ((typeof state.revealStartedAt === "number" && Number.isFinite(state.revealStartedAt) && revealDur > 0)
-        ? (state.revealStartedAt + revealDur)
-        : now);
+    : ((rs != null && dur != null) ? (rs + dur) : null);
 
-  const animDoneAt = readyAt + HOST_SCOREBOARD_LOCK_MS;
+  const animDoneAt = (readyAt != null) ? (readyAt + HOST_SCOREBOARD_LOCK_MS) : null;
 
-  if (now < animDoneAt){
+  // If we can't compute a reliable end time, fall back to red indicator.
+  if (animDoneAt == null) {
     nextBtn.classList.add("nextLocked");
-    nextBtn.setAttribute("title", "Scoreboard animatie loopt nog…");
+    nextBtn.setAttribute("title", "Animatie loopt nog…");
+    nextBtn.textContent = DEFAULT_LABEL;
+    return;
+  }
 
-    // Flip to green automatically once the animation window is over.
-    const waitMs = Math.max(10, Math.min(60000, animDoneAt - now + 25));
+  const msLeft = animDoneAt - now;
+
+  if (msLeft > 0){
+    nextBtn.classList.add("nextLocked");
+    // Countdown display (still clickable)
+    const sLeft = Math.max(0, msLeft / 1000);
+    nextBtn.textContent = `Next (${sLeft.toFixed(1)}s)`;
+    nextBtn.setAttribute("title", "Animatie loopt nog… (je kunt wel skippen)");
+
+    // Update countdown at a smooth cadence and flip to green at the end.
+    const waitMs = Math.max(20, Math.min(100, msLeft));
     window.__tbsNextVisualTimer = setTimeout(() => {
       try { updateNextVisual(window.__tbsLastHostState || state); } catch(e) {}
     }, waitMs);
   } else {
     nextBtn.classList.add("nextReady");
     nextBtn.setAttribute("title", "Klaar voor volgende ronde");
+    nextBtn.textContent = DEFAULT_LABEL;
   }
 }
 
