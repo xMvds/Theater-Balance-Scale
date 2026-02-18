@@ -1,6 +1,6 @@
 {
   "name": "theater-balance-scale",
-  "version": "3.0.0.88",
+  "version": "3.0.0.89",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {

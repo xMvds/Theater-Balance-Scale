@@ -722,83 +722,55 @@ body.noAnim:not(.hostPage):not(.infoPage)::after{ animation: none !important; }
 }
 
 
-/* ===== Player scoreboard — mobile layout (4 columns + stacked info) ===== */
+/* ===== Player scoreboard — mobile layout (match desktop cards, 4 columns) ===== */
 @media (max-width: 600px){
   .scorePanel .board{ padding: 0 10px; }
 
-  /* 4 tiles per row (as requested) + extra vertical breathing room between rows */
+  /* 4 tiles per row + enough vertical space so name/score/delta always fit */
   .scorePanel .tiles{
     display:grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     column-gap:8px;
-    row-gap:18px;
+    row-gap:22px;
     justify-content:stretch;
     align-items:start;
   }
 
-  /* On phone: the OUTER tile is just a layout wrapper. The NUMBER lives in a square box. */
+  /* Keep the SAME card look as desktop, just scaled to fit 4-up on phones */
   .scorePanel .tile{
-    width:auto;
+    width:100%;
     min-height:0;
     height:auto;
-    padding:0;
-    border:none;
-    background:transparent;
-    box-shadow:none;
+    padding:10px 8px;
   }
 
   .scorePanel .tName{
-    width:100%;
-    text-align:center;
-    font-size:11px;
+    font-size:10px;
     letter-spacing:0.10em;
     margin-bottom:6px;
     white-space:nowrap;
     overflow:hidden;
     text-overflow:ellipsis;
-    opacity:0.85;
   }
 
   .scorePanel .tGuess{
-    width:100%;
-    aspect-ratio: 1 / 1;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    padding:0;
-    border-radius:12px;
-    border:1px solid rgba(255,255,255,0.14);
-    background: rgba(0,0,0,0.34);
-    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06), inset 0 0 36px rgba(0,0,0,0.55);
-    font-size:26px;
-    letter-spacing:0.04em;
-  }
-
-  /* Winner/dead highlights should frame the SQUARE guess box on phones */
-  .scorePanel .tile.winner .tGuess{
-    box-shadow:
-      inset 0 0 0 1px rgba(255,255,255,0.18),
-      0 0 18px rgba(255,255,255,0.10),
-      inset 0 0 42px rgba(0,0,0,0.55);
-  }
-  .scorePanel .tile.dead .tGuess{
-    border-color: rgba(255,70,70,0.30);
+    font-size:22px;
+    padding:4px 0 8px;
   }
 
   .scorePanel .tScoreWrap{
-    margin-top:6px;
-    height:1.6em;
     min-height:22px;
+    height:1.8em;
   }
-  .scorePanel .scoreNum{ font-size:11px; }
+  .scorePanel .scoreNum{ font-size:10px; }
 
   .scorePanel .tDelta{
-    margin-top:4px;
-    font-size:11px;
+    margin-top:8px;
+    font-size:10px;
     letter-spacing:0.06em;
   }
 
-  /* Math row: spread a bit + add side padding so it doesn't sit against the tiles */
+  /* Math row: add side padding so it doesn't sit against the tiles */
   .scorePanel .mathRow{
     margin-top:18px;
     padding:0 6px;
