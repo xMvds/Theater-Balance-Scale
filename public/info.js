@@ -14,16 +14,41 @@
 
 const socket = io();
 
-function sendInfoHello() {
-  socket.emit("info_hello");
+// Simple server clock sync (state.serverNow is sent by server)
+let serverOffsetMs = 0;
+function updateServerClock(state){
+  const sn = state && typeof state.serverNow === "number" ? state.serverNow : null;
+  if (sn != null && Number.isFinite(sn)) {
+    serverOffsetMs = sn - Date.now();
+  }
+}
+function serverNow(){
+  return Date.now() + serverOffsetMs;
+}
+function revealElapsedMs(state){
+  const rs = state && typeof state.revealStartedAt === "number" ? state.revealStartedAt : null;
+  if (rs == null || !Number.isFinite(rs)) return 0;
+  return Math.max(0, serverNow() - rs);
 }
 
-socket.on("connect", sendInfoHello);
-socket.io.on("reconnect", sendInfoHello);
-window.addEventListener("pageshow", sendInfoHello);
-document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) sendInfoHello();
+socket.on("connect", () => {
+  socket.emit("info_hello");
+  socket.emit("sync");
 });
+
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) return;
+  try { socket.emit("sync"); } catch {}
+});
+
+// iOS Safari bfcache: ensure we request fresh state on restore
+window.addEventListener("pageshow", (e) => {
+  if (!e || !e.persisted) return;
+  try { socket.connect(); } catch {}
+  try { socket.emit("sync"); } catch {}
+});
+
 
 const blackout = document.getElementById("infoBlackout");
 const stage = document.getElementById("infoStage");
@@ -205,7 +230,7 @@ function fadeOutStageAndHide() {
     stage.classList.add("hidden");
     // leegmaken
     clearAnimTimers();
-    scene.classList.remove("s1","s2","s3a","s3","s3b","s4a","s4","ready","instant");
+    scene.classList.remove("s1","s2","s3a","s3","s3b","s4a","s4","ready","instant","opDone");
     namesRow.innerHTML = "";
     guessesRow.innerHTML = "";
     scoresRow.innerHTML = "";
@@ -243,10 +268,11 @@ function computeNewRuleLines(state) {
 
 function buildRevealScene(state, opts = {}) {
   const instant = !!opts.instant;
+  const startAtMs = Math.max(0, Number(opts.startAtMs || 0));
   clearAnimTimers();
 
   // reset classes
-  scene.classList.remove("s1","s2","s3a","s3","s3b","s4a","s4","ready","instant");
+  scene.classList.remove("s1","s2","s3a","s3","s3b","s4a","s4","ready","instant","opDone");
   namesRow.innerHTML = "";
   guessesRow.innerHTML = "";
   scoresRow.innerHTML = "";
@@ -260,63 +286,54 @@ function buildRevealScene(state, opts = {}) {
   avgValEl.textContent = fmt2(avg);
   targetValEl.textContent = fmt2(target);
 
-  const list = state.players.slice().sort((a, b) => a.name.localeCompare(b.name));
+  const list = (state.players || []).slice().sort((a, b) => String(a.name).localeCompare(String(b.name)));
 
   const pendingScoreAnims = [];
+  const allScoreCells = [];
 
   // Build aligned cells (same count per row)
-  list.forEach((p, index) => {
-    const col = (index % 4) + 1;
-    const row = Math.floor(index / 4) + 1;
-
+  for (const p of list) {
     // Names (hidden at first)
     const nameCell = document.createElement("div");
     nameCell.className = "infoCell infoName";
-    nameCell.style.gridColumn = String(col);
-    nameCell.style.gridRow = String(row);
     nameCell.textContent = p.name;
     namesRow.appendChild(nameCell);
 
     // Guess tile
     const guessCell = document.createElement("div");
     guessCell.className = "infoCell infoGuessTile";
-    guessCell.style.gridColumn = String(col);
-    guessCell.style.gridRow = String(row);
     guessCell.innerHTML = `<div class="guessNum">${(typeof p.lastGuess === "number") ? p.lastGuess : "—"}</div>`;
     guessesRow.appendChild(guessCell);
 
     // Total score
     const scoreCell = document.createElement("div");
     scoreCell.className = "infoCell infoScore";
-    scoreCell.style.gridColumn = String(col);
-    scoreCell.style.gridRow = String(row);
-const d = (typeof p.lastDelta === "number") ? p.lastDelta : 0;
-const isBad = d < 0;
+    const d = (typeof p.lastDelta === "number") ? p.lastDelta : 0;
+    const isBad = d < 0;
 
-// Winner glow (info): apply at the very end (together with min points)
-const isWinner = Array.isArray(lr.winnerIds) && lr.winnerIds.includes(p.id);
-if (isWinner) {
-  guessCell.dataset.winner = "1";
-  nameCell.dataset.winner = "1";
-}
+    // Winner glow (apply at the very end, together with min points)
+    const isWinner = Array.isArray(lr.winnerIds) && lr.winnerIds.includes(p.id);
+    if (isWinner) {
+      guessCell.dataset.winner = "1";
+      nameCell.dataset.winner = "1";
+    }
 
-// INFO: score-animatie moet op "hoeveel minpunten je HEBT" (totale score).
-// We bouwen de score-cel eerst met de OUDE score, en animeren pas zodra de score-rij zichtbaar is.
-const prev = prevScores.has(p.id) ? prevScores.get(p.id) : null;
-const from = (typeof prev === "number") ? prev : (typeof d === "number" ? (p.score - d) : p.score);
-const to = p.score;
+    // Build score cell with OLD score, animate only when score row becomes visible.
+    const prev = prevScores.has(p.id) ? prevScores.get(p.id) : null;
+    const from = (typeof prev === "number") ? prev : (typeof d === "number" ? (p.score - d) : p.score);
+    const to = p.score;
 
-if (instant) {
-  // bij instant (bv. info-refresh nadat reveal al klaar is): toon eindstand direct
-  const bad = (typeof to === "number") ? (to < 0) : false;
-  setScoreStatic(scoreCell, to, bad);
-} else {
-  scoreCell.innerHTML = `<div class="scoreNum live ${isBad ? "bad" : "good"}">${from}</div>`;
+    allScoreCells.push({ el: scoreCell, to });
 
-  if (isBad && typeof from === "number" && typeof to === "number" && to !== from) {
-    pendingScoreAnims.push({ el: scoreCell, from, to });
-  }
-}
+    if (instant) {
+      const bad = (typeof to === "number") ? (to < 0) : false;
+      setScoreStatic(scoreCell, to, bad);
+    } else {
+      scoreCell.innerHTML = `<div class="scoreNum live ${isBad ? "bad" : "good"}">${from}</div>`;
+      if (isBad && typeof from === "number" && typeof to === "number" && to !== from) {
+        pendingScoreAnims.push({ el: scoreCell, from, to });
+      }
+    }
 
     scoresRow.appendChild(scoreCell);
     prevScores.set(p.id, p.score);
@@ -324,78 +341,113 @@ if (instant) {
     // Delta
     const deltaCell = document.createElement("div");
     deltaCell.className = "infoCell infoDelta";
-    deltaCell.style.gridColumn = String(col);
-    deltaCell.style.gridRow = String(row);
-    // Delta blijft gewoon statisch (en rood als < 0)
     setDeltaStatic(deltaCell, d);
     deltasRow.appendChild(deltaCell);
-  });
+  }
 
-  if (instant) {
-    // Jump to the end-state immediately (e.g. info refreshed after reveal is done).
-    // Add a temporary class that disables transitions/animations so refresh doesn't
-    // re-play the "× 0.8 =" reveal (or other fades).
+  const snapToEnd = () => {
     scene.classList.add("instant");
     scene.classList.add("ready","s1","s2","s3a","s3","s3b","s4a","s4");
     for (const el of document.querySelectorAll("[data-winner=\"1\"]")) {
       el.classList.add("winner");
     }
+    // Ensure totals are at final values
+    for (const sc of allScoreCells) {
+      const bad = (typeof sc.to === "number") ? (sc.to < 0) : false;
+      setScoreStatic(sc.el, sc.to, bad);
+    }
     socket.emit("info_reveal_done", { round: state.round });
+  };
+
+  if (instant) {
+    snapToEnd();
     return;
   }
 
-  // Kick the staged animation sequence
-  requestAnimationFrame(() => {
+  // If we join late, jump to the correct visual state without replaying past transitions.
+  const applyAt = (ms) => {
+    const t = Math.max(0, ms);
+    scene.classList.add("instant");
     scene.classList.add("ready");
-    // Step 1: guesses fade in centered
-    requestAnimationFrame(() => scene.classList.add("s1"));
-
-    // Step 2: guesses slide up, avg appears
-animTimers.push(setTimeout(() => scene.classList.add("s2"), 1600));
-
-// Step 3a: gemiddelde schuift links (zonder som)
-animTimers.push(setTimeout(() => scene.classList.add("s3a"), 3000));
-
-// Step 3: som verschijnt (blijft gecentreerd)
-animTimers.push(setTimeout(() => scene.classList.add("s3"), 3800));
-
-// Step 3b: target verschijnt rechts (stilstaand infaden)
-animTimers.push(setTimeout(() => scene.classList.add("s3b"), 4600));
-
-// Step 4a: math row zakt omlaag (maakt ruimte) BEFORE scores appear
-animTimers.push(setTimeout(() => {
-  scene.classList.add("s4a");
-}, 6200));
-
-// Step 4: scores/deltas + names appear after math row moved
-animTimers.push(setTimeout(() => {
-  scene.classList.add("s4");
-  // Apply winner glow now (with the min points reveal)
-  for (const el of document.querySelectorAll("[data-winner=\"1\"]")) {
-    el.classList.add("winner");
-  }
-
-
-  // Start score animations now that the score row is visible
-  if (pendingScoreAnims.length) {
-    animTimers.push(setTimeout(() => {
-      for (const a of pendingScoreAnims) {
-        animateScoreNumber(a.el, a.from, a.to, true);
+    scene.classList.add("s1");
+    if (t >= 1600) scene.classList.add("s2");
+    if (t >= 3000) scene.classList.add("s3a");
+    if (t >= 3800) scene.classList.add("s3");
+    if (t >= 4600) scene.classList.add("s3b");
+    if (t >= 6200) scene.classList.add("s4a");
+    if (t >= 7600) {
+      scene.classList.add("s4");
+      for (const el of document.querySelectorAll("[data-winner=\"1\"]")) {
+        el.classList.add("winner");
       }
-    }, 900));
-  }
-}, 7600));
+    }
 
-// Signal to the server when the info reveal animation is finished.
-// Players will only open their scoreboard after this.
-animTimers.push(setTimeout(() => {
-  socket.emit("info_reveal_done", { round: state.round });
-}, 10300));
+    // Late-join / refresh mid-reveal: if the math operator should already be visible,
+    // keep it locked in the final state so it doesn't replay its fade/clip once on load.
+    scene.classList.toggle("opDone", t >= 3800);
+
+    // Catch up score animations
+    if (t >= 7600) {
+      if (t >= 8500) {
+        for (const sc of allScoreCells) {
+          const bad = (typeof sc.to === "number") ? (sc.to < 0) : false;
+          setScoreStatic(sc.el, sc.to, bad);
+        }
+      } else if (pendingScoreAnims.length) {
+        const delay = Math.max(0, 8500 - t);
+        animTimers.push(setTimeout(() => {
+          for (const a of pendingScoreAnims) {
+            animateScoreNumber(a.el, a.from, a.to, true);
+          }
+        }, delay));
+      }
+    }
+
+    // Remove instant after layout so future steps can animate normally.
+    requestAnimationFrame(() => requestAnimationFrame(() => scene.classList.remove("instant")));
+  };
+
+  // If we're already past the end, snap.
+  if (startAtMs >= 10300) {
+    snapToEnd();
+    return;
+  }
+
+  applyAt(startAtMs);
+
+  const schedule = (at, fn) => {
+    const d = at - startAtMs;
+    if (d <= 0) return;
+    animTimers.push(setTimeout(fn, d));
+  };
+
+  schedule(1600, () => scene.classList.add("s2"));
+  schedule(3000, () => scene.classList.add("s3a"));
+  schedule(3800, () => scene.classList.add("s3"));
+  schedule(4600, () => scene.classList.add("s3b"));
+  schedule(6200, () => scene.classList.add("s4a"));
+  schedule(7600, () => {
+    scene.classList.add("s4");
+    for (const el of document.querySelectorAll("[data-winner=\"1\"]")) {
+      el.classList.add("winner");
+    }
+    if (pendingScoreAnims.length) {
+      animTimers.push(setTimeout(() => {
+        for (const a of pendingScoreAnims) {
+          animateScoreNumber(a.el, a.from, a.to, true);
+        }
+      }, 900));
+    }
+  });
+
+  schedule(10300, () => {
+    socket.emit("info_reveal_done", { round: state.round });
   });
 }
 
 socket.on("state", (state) => {
   lastState = state;
+  updateServerClock(state);
 
   // reset bij lobby (nieuwe game/reset)
   if (state.phase === "lobby") {
@@ -437,7 +489,7 @@ socket.on("state", (state) => {
       stage.classList.add("hidden");
       stage.classList.remove("visible");
       clearAnimTimers();
-      scene.classList.remove("s1","s2","s3a","s3","s3b","s4a","s4","ready","instant");
+      scene.classList.remove("s1","s2","s3a","s3","s3b","s4a","s4","ready","instant","opDone");
       namesRow.innerHTML = "";
       guessesRow.innerHTML = "";
       scoresRow.innerHTML = "";
@@ -458,6 +510,8 @@ socket.on("state", (state) => {
   const revealKey = stableRevealKey(state);
   if (revealKey !== lastRevealKey) {
     lastRevealKey = revealKey;
-    buildRevealScene(state, { instant: state.revealReadyRound === state.round });
+    const instant = state.revealReadyRound === state.round;
+    const startAtMs = instant ? 0 : revealElapsedMs(state);
+    buildRevealScene(state, { instant, startAtMs });
   }
 });

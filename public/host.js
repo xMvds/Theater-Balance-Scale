@@ -16,18 +16,88 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Unlock host UI only after access code is accepted
   document.body.classList.remove("hostLocked");
-  const socket = io();
 
-  function requestFreshHostState(){
-    socket.emit("host_hello");
+const socket = io();
+
+// Simple server clock sync (state.serverNow is sent by server)
+let serverOffsetMs = 0;
+function updateServerClock(state){
+  const sn = state && typeof state.serverNow === "number" ? state.serverNow : null;
+  if (sn != null && Number.isFinite(sn)) {
+    serverOffsetMs = sn - Date.now();
+  }
+}
+function serverNow(){
+  return Date.now() + serverOffsetMs;
+}
+function revealElapsedMs(state){
+  const rs = state && typeof state.revealStartedAt === "number" ? state.revealStartedAt : null;
+  if (rs == null || !Number.isFinite(rs)) return null;
+  return Math.max(0, serverNow() - rs);
+}
+
+function updateNextVisual(state){
+  if (!nextBtn) return;
+
+  // If the host doesn't receive any more state packets after the reveal has finished,
+  // we still want the button to flip from red -> green based on time.
+  // So we schedule a one-shot refresh when needed.
+  if (window.__tbsNextVisualTimer) {
+    clearTimeout(window.__tbsNextVisualTimer);
+    window.__tbsNextVisualTimer = null;
   }
 
-  socket.on("connect", requestFreshHostState);
-  socket.io.on("reconnect", requestFreshHostState);
-  window.addEventListener("pageshow", requestFreshHostState);
-  document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) requestFreshHostState();
-  });
+  // Reset styling
+  nextBtn.classList.remove("nextLocked", "nextReady", "nextWaiting");
+  nextBtn.removeAttribute("title");
+
+  const isGameOver = !!state?.gameOver;
+  if (isGameOver) {
+    return;
+  }
+
+  if (state?.phase !== "revealed") return;
+
+  const revealDur = (typeof state.revealDurationMs === "number" && Number.isFinite(state.revealDurationMs))
+    ? state.revealDurationMs
+    : 0;
+
+  const now = serverNow();
+  const revealReady = (state.revealReadyRound === state.round);
+
+  // Red while any reveal/scoreboard animations are still running.
+  if (!revealReady){
+    nextBtn.classList.add("nextLocked");
+    nextBtn.setAttribute("title", "Reveal animatie loopt nog…");
+    return;
+  }
+
+  const HOST_SCOREBOARD_LOCK_MS = 1400;
+
+  const readyAt = (typeof state.revealReadyAt === "number" && Number.isFinite(state.revealReadyAt))
+    ? state.revealReadyAt
+    : ((typeof state.revealStartedAt === "number" && Number.isFinite(state.revealStartedAt) && revealDur > 0)
+        ? (state.revealStartedAt + revealDur)
+        : now);
+
+  const animDoneAt = readyAt + HOST_SCOREBOARD_LOCK_MS;
+
+  if (now < animDoneAt){
+    nextBtn.classList.add("nextLocked");
+    nextBtn.setAttribute("title", "Scoreboard animatie loopt nog…");
+
+    // Flip to green automatically once the animation window is over.
+    const waitMs = Math.max(10, Math.min(60000, animDoneAt - now + 25));
+    window.__tbsNextVisualTimer = setTimeout(() => {
+      try { updateNextVisual(window.__tbsLastHostState || state); } catch(e) {}
+    }, waitMs);
+  } else {
+    nextBtn.classList.add("nextReady");
+    nextBtn.setAttribute("title", "Klaar voor volgende ronde");
+  }
+}
+
+
 
   const hostHint = document.getElementById("hostHint");
   const startBtn = document.getElementById("startBtn");
@@ -35,6 +105,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const nextBtn = document.getElementById("nextBtn");
   const devFillBtn = document.getElementById("devFillBtn");
   const resetBtn = document.getElementById("resetBtn");
+  // Player reveal is automatic (option 2): if no info screen is connected, players run the reveal.
 
   // --- Player background test (A/B/C/D) ---
 // These buttons live on the HOST page, but they switch the BACKGROUND on all PLAYER screens.
@@ -53,6 +124,28 @@ try{
   const saved = localStorage.getItem(LS_BG_MODE);
   if (saved === "A" || saved === "B" || saved === "C" || saved === "D") playerBgMode = saved;
 }catch(e){}
+
+
+// Reconnect-safe: when a laptop sleeps, socket.io can reconnect with a new socket id.
+// We must re-send host_hello so the server re-marks this socket as host (otherwise host controls stop working).
+socket.on("connect", () => {
+  try { socket.emit("host_hello"); } catch {}
+  try { socket.emit("sync"); } catch {}
+
+  // Re-apply the chosen player BG mode (server ignores until host_hello was processed).
+  setTimeout(() => {
+    try { socket.emit("host_player_bg_mode", { mode: playerBgMode }); } catch {}
+  }, 40);
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) return;
+  try { socket.emit("host_hello"); } catch {}
+  try { socket.emit("sync"); } catch {}
+  setTimeout(() => {
+    try { socket.emit("host_player_bg_mode", { mode: playerBgMode }); } catch {}
+  }, 40);
+});
 
 const applyPlayerBgUi = (mode) => {
   bgTestA?.classList.toggle("active", mode === "A");
@@ -530,6 +623,8 @@ let resetArmed = false;
   revealBtn?.addEventListener("click", () => socket.emit("host_reveal"));
   nextBtn?.addEventListener("click", () => socket.emit("host_next"));
 
+  // Player reveal is automatic now (option 2). No toggle.
+
   devFillBtn?.addEventListener("click", () => socket.emit("host_devfill"));
 
   resetBtn?.addEventListener("click", () => {
@@ -865,6 +960,8 @@ let resetArmed = false;
 
   socket.on("state", (state) => {
     lastState = state;
+    window.__tbsLastHostState = state;
+    updateServerClock(state);
 
     // Keep BG test buttons in sync with the current PLAYER background mode
     if (state.playerBgMode) {
@@ -891,11 +988,9 @@ const playersTotal = state.players?.length ?? 0;
     nextBtn.disabled = isGameOver || !(state.phase === "revealed");
     devFillBtn.disabled = isGameOver || !(state.phase === "collecting");
 
-    const revealAnimDone =
-      !isGameOver &&
-      state.phase === "revealed" &&
-      Number(state.revealReadyRound || 0) === Number(state.round || 0);
-    nextBtn?.classList.toggle("revealReadyPulse", revealAnimDone);
+    updateNextVisual(state);
+
+    // (no player reveal toggle)
 
     // Make reset the obvious action when the game has ended.
     resetBtn?.classList.toggle("resetPulse", isGameOver);
@@ -906,7 +1001,7 @@ const playersTotal = state.players?.length ?? 0;
   });
 
   // Ask the server for the latest state now that listeners are ready.
-  requestFreshHostState();
+  socket.emit("host_hello");
   // Now that the server marked this socket as host, broadcast the chosen player BG mode.
   commitPlayerBgMode(playerBgMode);
 
