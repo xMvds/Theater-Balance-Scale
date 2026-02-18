@@ -943,6 +943,7 @@ function prAnimateScoreNumber(el, from, to, isBad) {
 
 function prBuildRevealScene(state, opts = {}) {
   const instant = !!opts.instant;
+  const phoneLayout = !!(window.matchMedia && window.matchMedia("(max-width: 600px)").matches);
   if (!infoScene) return { start: () => {}, duration: 0 };
 
   // reset classes
@@ -961,55 +962,96 @@ function prBuildRevealScene(state, opts = {}) {
   const allScoreCells = [];
 
   for (const p of list) {
-    // Names (hidden at first)
-    const nameCell = document.createElement("div");
-    nameCell.className = "infoCell infoName";
-    nameCell.textContent = p.name;
-    infoNamesRow?.appendChild(nameCell);
-
-    // Guess tile
-    const guessCell = document.createElement("div");
-    guessCell.className = "infoCell infoGuessTile";
-    guessCell.innerHTML = `<div class="guessNum">${(typeof p.lastGuess === "number") ? p.lastGuess : "—"}</div>`;
-    infoGuessesRow?.appendChild(guessCell);
-
     const d = (typeof p.lastDelta === "number") ? p.lastDelta : 0;
     const isBad = d < 0;
-
-    // Winner flag (glow is applied later, together with min points)
     const isWinner = Array.isArray(lr.winnerIds) && lr.winnerIds.includes(p.id);
-    if (isWinner) {
-      guessCell.dataset.winner = "1";
-      nameCell.dataset.winner = "1";
-    }
 
-    // Total score (animate from previous)
-    const scoreCell = document.createElement("div");
-    scoreCell.className = "infoCell infoScore";
-    const prev = (typeof p.prevScore === "number") ? p.prevScore : (overlayPrevScores.has(p.id) ? overlayPrevScores.get(p.id) : null);
-    const from = (typeof prev === "number") ? prev : ((typeof p.score === "number" && typeof d === "number") ? (p.score - d) : p.score);
-    const to = p.score;
-    allScoreCells.push({ el: scoreCell, to });
+    const guessCell = document.createElement("div");
+    guessCell.className = "infoCell infoGuessTile";
 
-    if (instant) {
-      const bad = (typeof to === "number") ? (to < 0) : false;
-      prSetScoreStatic(scoreCell, to, bad);
-    } else {
-      scoreCell.innerHTML = `<div class="scoreNum live ${isBad ? "bad" : "good"}">${from}</div>`;
-      if (isBad && typeof from === "number" && typeof to === "number" && to !== from) {
-        pendingScoreAnims.push({ el: scoreCell, from, to });
+    if (phoneLayout) {
+      const nameEl = document.createElement("div");
+      nameEl.className = "gName";
+      nameEl.textContent = p.name;
+
+      const guessEl = document.createElement("div");
+      guessEl.className = "guessNum";
+      guessEl.textContent = (typeof p.lastGuess === "number") ? String(p.lastGuess) : "—";
+
+      const meta = document.createElement("div");
+      meta.className = "gMeta";
+
+      const scoreCell = document.createElement("div");
+      scoreCell.className = "infoScore";
+
+      const prev = (typeof p.prevScore === "number") ? p.prevScore : (overlayPrevScores.has(p.id) ? overlayPrevScores.get(p.id) : null);
+      const from = (typeof prev === "number") ? prev : ((typeof p.score === "number" && typeof d === "number") ? (p.score - d) : p.score);
+      const to = p.score;
+      allScoreCells.push({ el: scoreCell, to });
+
+      if (instant) {
+        const bad = (typeof to === "number") ? (to < 0) : false;
+        prSetScoreStatic(scoreCell, to, bad);
+      } else {
+        scoreCell.innerHTML = `<div class="scoreNum live ${isBad ? "bad" : "good"}">${from}</div>`;
+        if (isBad && typeof from === "number" && typeof to === "number" && to !== from) {
+          pendingScoreAnims.push({ el: scoreCell, from, to });
+        }
       }
-    }
-    infoScoresRow?.appendChild(scoreCell);
-    overlayPrevScores.set(p.id, p.score);
+      overlayPrevScores.set(p.id, p.score);
 
-    // Delta (static)
-    const deltaCell = document.createElement("div");
-    deltaCell.className = "infoCell infoDelta";
-    const isBadDelta = d < 0;
-    const txt = (typeof d === "number") ? (d === 0 ? "0" : String(d)) : "0";
-    deltaCell.innerHTML = `<div class="deltaNum ${isBadDelta ? "bad" : "neutral"}">${txt}</div>`;
-    infoDeltasRow?.appendChild(deltaCell);
+      const deltaCell = document.createElement("div");
+      deltaCell.className = "infoDelta";
+      const isBadDelta = d < 0;
+      const txt = (typeof d === "number") ? (d === 0 ? "0" : String(d)) : "0";
+      deltaCell.innerHTML = `<div class="deltaNum ${isBadDelta ? "bad" : "neutral"}">${txt}</div>`;
+
+      meta.appendChild(scoreCell);
+      meta.appendChild(deltaCell);
+
+      guessCell.appendChild(nameEl);
+      guessCell.appendChild(guessEl);
+      guessCell.appendChild(meta);
+    } else {
+      // Classic separate rows
+      const nameCell = document.createElement("div");
+      nameCell.className = "infoCell infoName";
+      nameCell.textContent = p.name;
+      infoNamesRow?.appendChild(nameCell);
+
+      guessCell.innerHTML = `<div class="guessNum">${(typeof p.lastGuess === "number") ? p.lastGuess : "—"}</div>`;
+
+      const scoreCell = document.createElement("div");
+      scoreCell.className = "infoCell infoScore";
+      const prev = (typeof p.prevScore === "number") ? p.prevScore : (overlayPrevScores.has(p.id) ? overlayPrevScores.get(p.id) : null);
+      const from = (typeof prev === "number") ? prev : ((typeof p.score === "number" && typeof d === "number") ? (p.score - d) : p.score);
+      const to = p.score;
+      allScoreCells.push({ el: scoreCell, to });
+
+      if (instant) {
+        const bad = (typeof to === "number") ? (to < 0) : false;
+        prSetScoreStatic(scoreCell, to, bad);
+      } else {
+        scoreCell.innerHTML = `<div class="scoreNum live ${isBad ? "bad" : "good"}">${from}</div>`;
+        if (isBad && typeof from === "number" && typeof to === "number" && to !== from) {
+          pendingScoreAnims.push({ el: scoreCell, from, to });
+        }
+      }
+      infoScoresRow?.appendChild(scoreCell);
+      overlayPrevScores.set(p.id, p.score);
+
+      const deltaCell = document.createElement("div");
+      deltaCell.className = "infoCell infoDelta";
+      const isBadDelta = d < 0;
+      const txt = (typeof d === "number") ? (d === 0 ? "0" : String(d)) : "0";
+      deltaCell.innerHTML = `<div class="deltaNum ${isBadDelta ? "bad" : "neutral"}">${txt}</div>`;
+      infoDeltasRow?.appendChild(deltaCell);
+
+      if (isWinner) nameCell.dataset.winner = "1";
+    }
+
+    if (isWinner) guessCell.dataset.winner = "1";
+    infoGuessesRow?.appendChild(guessCell);
   }
 
   const snapToEnd = () => {

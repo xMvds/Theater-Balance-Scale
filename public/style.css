@@ -722,26 +722,24 @@ body.noAnim:not(.hostPage):not(.infoPage)::after{ animation: none !important; }
 }
 
 
-/* ===== Player scoreboard — mobile layout (4 columns) ===== */
+/* ===== Player scoreboard — mobile layout (reverted to earlier compact 3 columns) ===== */
 @media (max-width: 600px){
-  .scorePanel .board{ padding: 0 6px; }
+  .scorePanel .board{ padding: 0 8px; }
   .scorePanel .tiles{
     display:grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap:6px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap:8px;
     justify-content:stretch;
     align-items:stretch;
   }
   .scorePanel .tile{
     width:auto;
-    min-height:104px;
-    padding:8px 8px;
+    min-height:118px;
+    padding:10px 10px;
   }
-
-  /* Ensure the correct elements are targeted (tile markup uses tName/tGuess/scoreNum/tDelta) */
   .scorePanel .tName{
-    font-size:11px;
-    letter-spacing:0.08em;
+    font-size:12px;
+    letter-spacing:0.10em;
     text-align:center;
     white-space:nowrap;
     overflow:hidden;
@@ -749,35 +747,20 @@ body.noAnim:not(.hostPage):not(.infoPage)::after{ animation: none !important; }
     margin-bottom:6px;
   }
   .scorePanel .tGuess{
-    font-size:18px;
-    letter-spacing:0.04em;
-    padding:4px 0 6px;
-  }
-  .scorePanel .tScoreWrap{ margin-top:2px; }
-  .scorePanel .scoreNum{
-    font-size:24px;
-    line-height:1;
+    margin-top:10px;
+    font-size:34px;
+    letter-spacing:0.02em;
+    padding:0;
   }
   .scorePanel .tDelta{
     margin-top:6px;
-    font-size:11px;
+    font-size:12px;
     letter-spacing:0.06em;
   }
-
   .scorePanel .mathRow{
     margin-top:12px;
-    font-size:15px;
+    font-size:16px;
   }
-}
-
-/* Extra-tight phones */
-@media (max-width: 360px){
-  .scorePanel .tiles{ gap:5px; }
-  .scorePanel .tile{ min-height:96px; padding:7px 7px; }
-  .scorePanel .tName{ font-size:10px; }
-  .scorePanel .tGuess{ font-size:16px; }
-  .scorePanel .scoreNum{ font-size:22px; }
-  .scorePanel .tDelta{ font-size:10px; }
 }
 /* ===== END mobile scoreboard ===== */
 
@@ -2069,7 +2052,7 @@ body.survivedTheme{
 
 
 
-/* ===== Info / Player reveal scene — phone layout (4 columns) ===== */
+/* ===== Info / Player reveal scene — phone layout (4 columns, per-tile header & meta) ===== */
 @media (max-width: 600px){
   .infoFrame{
     width: min(980px, 98vw);
@@ -2078,10 +2061,13 @@ body.survivedTheme{
 
   .infoScene{ gap: 12px; }
 
+  /* On phones we render names + scores inside each guess tile.
+     This prevents the "second row of names" from sitting above the first row of tiles. */
   .infoNamesRow,
-  .infoGuessesRow,
   .infoScoresRow,
-  .infoDeltasRow{
+  .infoDeltasRow{ display:none !important; }
+
+  .infoGuessesRow{
     display:grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 10px 8px;
@@ -2093,41 +2079,63 @@ body.survivedTheme{
     margin-right:auto;
   }
 
-  /* Allow multi-row wrapping without clipping on phones */
-  .infoNamesRow,
-  .infoScoresRow,
-  .infoDeltasRow{
-    height:auto;
-    overflow:visible;
-  }
-
   .infoCell{ width:auto; min-width:0; }
-
-  .infoName{
-    font-size: 12px;
-    letter-spacing: 0.08em;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
 
   .infoGuessTile{
     width: 100%;
     padding: 10px 8px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:flex-start;
+    gap:6px;
   }
+
+  .infoGuessTile .gName{
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    opacity:0;
+    transform: translateY(6px);
+    transition: opacity 1800ms ease, transform 1400ms ease;
+  }
+  .infoScene.s1 .infoGuessTile .gName{ opacity:1; transform: translateY(0); }
+
   .infoGuessTile .guessNum{
     font-size: 34px;
     line-height: 1.1;
+    margin-top:2px;
   }
 
-  .infoScore{ height:18px; }
-  .infoScore .scoreNum{ font-size: 14px; font-weight: 700; }
+  .infoGuessTile .gMeta{
+    width:100%;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:2px;
+    margin-top:4px;
+    opacity:0;
+    transform: translateY(6px);
+    transition: opacity 1800ms ease, transform 1400ms ease;
+  }
+  .infoScene.s4 .infoGuessTile .gMeta{ opacity:1; transform: translateY(0); }
 
-  .infoDelta{ height:18px; }
-  .infoDelta .deltaNum{ font-size: 14px; }
-
-  .infoScoresRow,
-  .infoDeltasRow{ margin-top:-6px; }
+  /* Override the default row-based opacity/transform rules for score/delta when used inside a tile. */
+  .gMeta .infoScore,
+  .gMeta .infoDelta{
+    height:18px;
+    opacity:1;
+    transform:none;
+    transition:none;
+  }
+  .gMeta .infoScore{ overflow:hidden; }
+  .gMeta .infoScore .scoreNum{ font-size: 14px; font-weight: 700; }
+  .gMeta .infoDelta{ overflow:hidden; }
+  .gMeta .infoDelta .deltaNum{ font-size: 14px; font-weight: 700; }
 
   /* Math row: keep the original 3-part layout but make it fit on phones */
   .infoMathRow{ --mathGap: 120px; }
@@ -2139,10 +2147,7 @@ body.survivedTheme{
 }
 
 @media (max-width: 360px){
-  .infoNamesRow,
-  .infoGuessesRow,
-  .infoScoresRow,
-  .infoDeltasRow{ gap: 8px 6px; }
+  .infoGuessesRow{ gap: 8px 6px; }
 
   .infoGuessTile .guessNum{ font-size: 30px; }
   .infoMathRow{ --mathGap: 108px; }
