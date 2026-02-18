@@ -1834,6 +1834,110 @@ body.survivedTheme{
   .infoNamesRow,
   .infoScoresRow,
   .infoDeltasRow{ height: auto; min-height: 44px; }
+
+  /* === Phone layout (single per-player card grid) ===
+     Fixes: row 2+ misalignment where names/scores/deltas wrap differently than guess tiles.
+     When JS adds .phone to .infoScene, we render everything inside the guess tile itself. */
+  .infoScene.phone{
+    gap: 16px;
+  }
+
+  .infoScene.phone .infoNamesRow,
+  .infoScene.phone .infoScoresRow,
+  .infoScene.phone .infoDeltasRow{
+    display:none !important;
+    height:0 !important;
+    min-height:0 !important;
+    margin:0 !important;
+    padding:0 !important;
+  }
+
+  .infoScene.phone .infoGuessesRow{
+    display:grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    column-gap: 10px;
+    /* Extra space between rows so there is room for: name + score + delta */
+    row-gap: 26px;
+    padding: 0 14px;
+    justify-content:center;
+    align-items:start;
+  }
+
+  .infoScene.phone .infoCell{ width:auto; }
+
+  /* Outer tile becomes a wrapper; the square lives on .guessNum */
+  .infoScene.phone .infoGuessTile{
+    border: none;
+    background: transparent;
+    padding: 0;
+    box-shadow: none;
+  }
+
+  .infoScene.phone .gName{
+    text-align:center;
+    font-size: 11px;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.86);
+    margin-bottom: 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .infoScene.phone .infoGuessTile .guessNum{
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,.12);
+    background: rgba(0,0,0,.35);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.06), inset 0 0 36px rgba(0,0,0,.55);
+    padding: 0;
+    line-height: 1;
+    font-size: 28px;
+    font-weight: 800;
+  }
+
+  /* Winner glow should frame the SQUARE box */
+  .infoScene.phone .infoGuessTile.winner .guessNum{
+    text-shadow: 0 0 16px rgba(255,255,255,.32);
+    box-shadow:
+      inset 0 0 0 1px rgba(255,255,255,.18),
+      0 0 18px rgba(255,255,255,.10),
+      inset 0 0 42px rgba(0,0,0,.55);
+  }
+
+  .infoScene.phone .gMeta{
+    margin-top: 10px;
+    display:flex;
+    flex-direction:column;
+    gap: 6px;
+    align-items:center;
+  }
+
+  .infoScene.phone .infoScore,
+  .infoScene.phone .infoDelta{
+    height: 22px;
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity 1800ms ease, transform 1400ms ease, text-shadow 1400ms ease;
+  }
+
+  /* When we reach the final stage, show score + delta inside each card */
+  .infoScene.phone.s4 .infoScore,
+  .infoScene.phone.s4 .infoDelta{
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .infoScene.phone .infoScore .scoreNum{ font-size: 14px; font-weight: 800; }
+  .infoScene.phone .infoDelta .deltaNum{ font-size: 14px; }
+
+  /* Give the math row some extra breathing room from the player grid */
+  .infoScene.phone.s4 .infoMathRow{ transform: translateY(28px); }
 }
 
 /* s3b: target verschijnt rechts */

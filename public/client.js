@@ -943,8 +943,13 @@ function prAnimateScoreNumber(el, from, to, isBad) {
 
 function prBuildRevealScene(state, opts = {}) {
   const instant = !!opts.instant;
-  const phoneLayout = false;
+  // Phone layout: keep each player's name + guess + score + delta as ONE block
+  // so wrapping never desyncs between rows (fixes misaligned row 2+ on phones).
+  const phoneLayout = !!(window.matchMedia && window.matchMedia('(max-width: 600px)').matches);
   if (!infoScene) return { start: () => {}, duration: 0 };
+
+  // Expose layout mode to CSS
+  infoScene.classList.toggle('phone', phoneLayout);
 
   // reset classes
   infoScene.classList.remove("s1","s2","s3a","s3","s3b","s4a","s4","ready","instant","opDone");

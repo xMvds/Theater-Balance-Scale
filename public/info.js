@@ -282,8 +282,13 @@ function computeNewRuleLines(state) {
 function buildRevealScene(state, opts = {}) {
   const instant = !!opts.instant;
   const startAtMs = Math.max(0, Number(opts.startAtMs || 0));
-  const phoneLayout = false;
+  // Phone layout: keep each player's name + guess + score + delta as ONE block
+  // so wrapping never desyncs between rows (fixes misaligned row 2+ on phones).
+  const phoneLayout = !!(window.matchMedia && window.matchMedia('(max-width: 600px)').matches);
   clearAnimTimers();
+
+  // Expose layout mode to CSS
+  scene.classList.toggle('phone', phoneLayout);
 
   // reset classes
   scene.classList.remove("s1","s2","s3a","s3","s3b","s4a","s4","ready","instant","opDone");
