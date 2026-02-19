@@ -87,6 +87,9 @@ const game = {
 const INFO_ANIM_TOTAL_MS = 10300; // ms
 // Player-side reveal includes the info timeline + slower fade-out back to UI.
 const PLAYER_REVEAL_TOTAL_MS = 12000; // ms
+// Host button countdown includes a short "scoreboard settle" window after the reveal is ready.
+// Keep this aligned with public/host.js (HOST_SCOREBOARD_LOCK_MS).
+const HOST_SCOREBOARD_LOCK_MS = 1400; // ms
 let revealReadyTimer = null;
 
 // Allow dev fill from player debug UI only when explicitly enabled.
@@ -627,21 +630,41 @@ socket.on("join", ({ name, playerKey }) => {
     if (game.gameOver) return;
     if (game.phase !== "revealed") return;
 
-    // IMPORTANT UX:
-    // - While the reveal is still running, "Next" acts as SKIP/UNLOCK (open score panels immediately)
-    // - Only after the reveal is ready, "Next" advances to the next round.
-    if (game.revealReadyRound !== game.round) {
-      markRevealReady(game.round);
+    // UX (updated):
+    // If the host presses "Next" while the reveal/scoreboard timer is still running,
+    // immediately fade out/abort the reveal and start the next round so players can
+    // enter a new guess right away.
+    // (If the host wants to watch the scores, they simply wait until the timer is done.)
+
+    const now = Date.now();
+    const rs = (typeof game.revealStartedAt === "number" && Number.isFinite(game.revealStartedAt)) ? game.revealStartedAt : null;
+    const dur = (typeof game.revealDurationMs === "number" && Number.isFinite(game.revealDurationMs)) ? game.revealDurationMs : null;
+    const readyAt = (typeof game.revealReadyAt === "number" && Number.isFinite(game.revealReadyAt))
+      ? game.revealReadyAt
+      : ((rs != null && dur != null) ? (rs + dur) : null);
+    const animDoneAt = (readyAt != null) ? (readyAt + HOST_SCOREBOARD_LOCK_MS) : null;
+
+    const timerRunning = (animDoneAt == null)
+      ? (game.revealReadyRound !== game.round)
+      : (now < animDoneAt);
+
+    if (timerRunning) {
+      // Start next round immediately.
+      game.phase = "collecting";
+      game.round += 1;
+      clearRevealSync();
+      resetForNewRound();
+      setRoundRulesSnapshot();
+      broadcastState();
       return;
     }
 
+    // Normal next (after timer): advance to next round.
     game.phase = "collecting";
     game.round += 1;
-
     clearRevealSync();
     resetForNewRound();
     setRoundRulesSnapshot(); // snapshot rules for the new round
-
     broadcastState();
   });
 
