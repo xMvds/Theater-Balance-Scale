@@ -1829,8 +1829,8 @@ body.survivedTheme{
     grid-template-columns: repeat(4, minmax(0, 1fr));
     /* More breathing room so score/delta never visually "bleed" into neighbors */
     column-gap: 14px;
-    /* Extra space between rows so there is room for: name + square + score + delta */
-    row-gap: 50px;
+	  /* Extra space between rows so there is room for: name + square + score + delta */
+	  row-gap: 70px;
     padding: 0 16px;
     justify-content:center;
     align-items:start;
