@@ -1830,7 +1830,7 @@ body.survivedTheme{
     /* More breathing room so score/delta never visually "bleed" into neighbors */
     column-gap: 14px;
     /* Extra space between rows so there is room for: name + square + score + delta */
-    row-gap: 34px;
+    row-gap: 50px;
     padding: 0 16px;
     justify-content:center;
     align-items:start;
