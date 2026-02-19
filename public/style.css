@@ -1843,6 +1843,12 @@ body.survivedTheme{
     background: transparent;
     padding: 0;
     box-shadow: none;
+    /* Override generic phone rules: stack name ABOVE square tile, then score/delta. */
+    display:flex;
+    flex-direction:column;
+    align-items:stretch;
+    justify-content:flex-start;
+    aspect-ratio: auto;
   }
 
   .infoScene.phone .gName{

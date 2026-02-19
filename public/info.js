@@ -284,6 +284,8 @@ function buildRevealScene(state, opts = {}) {
   const startAtMs = Math.max(0, Number(opts.startAtMs || 0));
   // Phone layout: keep each player's name + guess + score + delta as ONE block
   // so wrapping never desyncs between rows (fixes misaligned row 2+ on phones).
+  // This layout also matches the requested compact 4-up grid with the name ABOVE
+  // the corresponding guess tile.
   const phoneLayout = !!(window.matchMedia && window.matchMedia('(max-width: 600px)').matches);
   clearAnimTimers();
 
