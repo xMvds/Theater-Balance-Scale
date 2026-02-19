@@ -1827,10 +1827,11 @@ body.survivedTheme{
   .infoScene.phone .infoGuessesRow{
     display:grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    column-gap: 10px;
-    /* Extra space between rows so there is room for: name + score + delta */
-    row-gap: 26px;
-    padding: 0 14px;
+    /* More breathing room so score/delta never visually "bleed" into neighbors */
+    column-gap: 14px;
+    /* Extra space between rows so there is room for: name + square + score + delta */
+    row-gap: 34px;
+    padding: 0 16px;
     justify-content:center;
     align-items:start;
   }
@@ -1869,7 +1870,8 @@ body.survivedTheme{
     display:flex;
     align-items:center;
     justify-content:center;
-    border-radius: 12px;
+    /* Hoekige vakjes (geen ronding) */
+    border-radius: 0px;
     border: 1px solid rgba(255,255,255,.12);
     background: rgba(0,0,0,.35);
     box-shadow: inset 0 0 0 1px rgba(255,255,255,.06), inset 0 0 36px rgba(0,0,0,.55);
@@ -1889,11 +1891,28 @@ body.survivedTheme{
   }
 
   .infoScene.phone .gMeta{
-    margin-top: 10px;
+    margin-top: 12px;
     display:flex;
     flex-direction:column;
     gap: 6px;
     align-items:center;
+    width: 100%;
+  }
+
+  /* Keep score + delta strictly inside their own column (no overlap into other tiles) */
+  .infoScene.phone .infoScore,
+  .infoScene.phone .infoDelta{
+    width: 100%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    overflow:hidden;
+  }
+
+  .infoScene.phone .infoScore .scoreNum,
+  .infoScene.phone .infoDelta .deltaNum{
+    width: 100%;
+    text-align:center;
   }
 
   .infoScene.phone .infoScore,
