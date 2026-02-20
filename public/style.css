@@ -2030,30 +2030,6 @@ body.survivedTheme{
   width: 100%;
 }
 
-.settingsRow{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap: 10px;
-  font-size: 12px;
-  letter-spacing: .10em;
-  text-transform: uppercase;
-  color: rgba(255,255,255,.80);
-}
-.settingsSelect{
-  width: 92px;
-  border: 1px solid rgba(255,255,255,.14);
-  background: rgba(0,0,0,.35);
-  color: rgba(255,255,255,.86);
-  padding: 6px 8px;
-  font-size: 12px;
-  border-radius: 0;
-  outline: none;
-}
-.settingsSelect:focus{
-  border-color: rgba(255,255,255,.28);
-}
-
 /* Debug button (host) */
 
 .debugFab{
