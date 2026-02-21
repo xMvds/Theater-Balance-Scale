@@ -114,70 +114,6 @@ function fmt2(n) {
   return (Math.round(n * 100) / 100).toFixed(2);
 }
 
-function safeText(str){
-  return String(str ?? "").replace(/[<>&]/g, s => ({ "<":"&lt;", ">":"&gt;", "&":"&amp;" }[s]));
-}
-
-function formatDisplayName(p){
-  const nm = (p?.name || "—") + (p?.emoji ? (" " + p.emoji) : "") + ((Number(p?.winStreak || 0) >= 3) ? " 👑" : "");
-  return nm;
-}
-
-function renderFinalOverlay(finalStats){
-  if (!infoFinalEl) return;
-  if (!finalStats || !finalStats.top3) {
-    infoFinalEl.classList.add("hidden");
-    infoFinalEl.innerHTML = "";
-    return;
-  }
-
-  const top = finalStats.top3 || [];
-  const badges = finalStats.badges || {};
-
-  const podium = top.map((p, idx) => {
-    const rank = idx + 1;
-    const name = safeText((p.name || "—") + (p.emoji ? (" " + p.emoji) : "") + ((Number(p.winStreak || 0) >= 3) ? " 👑" : ""));
-    const score = (typeof p.score === "number") ? p.score : "—";
-    return `<div class="podiumItem"><div class="podiumRank">#${rank}</div><div class="podiumName">${name}</div><div class="podiumScore">${score}</div></div>`;
-  }).join("");
-
-  const badgeRow = (title, desc, winnerObj) => {
-    const w = winnerObj ? safeText((winnerObj.name || "—") + (winnerObj.emoji ? (" " + winnerObj.emoji) : "") ) : "—";
-    return `<div class="badge"><div class="badgeLeft"><div class="badgeTitle">${safeText(title)}</div><div class="badgeDesc">${safeText(desc)}</div></div><div class="badgeWinner">${w}</div></div>`;
-  };
-
-  const html = `
-    <div class="finalCard">
-      <div class="finalTitle">Eindscores</div>
-      <div class="finalGrid">
-        <div class="finalCol">
-          <div class="finalColTitle">Top 3</div>
-          <div class="podium">${podium || ""}</div>
-        </div>
-        <div class="finalCol">
-          <div class="finalColTitle">MVP momenten</div>
-          <div class="badgeList">
-            ${badgeRow("Closest overall", "Gemiddeld het dichtst bij Target", badges.closestOverall)}
-            ${badgeRow("Closest to average", "Gemiddeld het dichtst bij Gemiddelde", badges.closestToAverage)}
-            ${badgeRow("Most wins", "Meeste rondes gewonnen", badges.mostWins)}
-            ${badgeRow("Best streak", "Langste win-streak", badges.bestStreak)}
-            ${badgeRow("Most chaotic", "Grootste spreiding in keuzes", badges.mostChaotic)}
-            ${badgeRow("Most consistent", "Meest consistente keuzes", badges.mostConsistent)}
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-  infoFinalEl.innerHTML = html;
-  infoFinalEl.classList.remove("hidden");
-}
-
-function hideFinalOverlay(){
-  if (!infoFinalEl) return;
-  infoFinalEl.classList.add("hidden");
-  infoFinalEl.innerHTML = "";
-}
-
 function animateScoreNumber(el, from, to, isBad) {
   el.innerHTML = "";
 
@@ -387,14 +323,12 @@ function buildRevealScene(state, opts = {}) {
     // Guess tile (always exists)
     const guessCell = document.createElement("div");
     guessCell.className = "infoCell infoGuessTile";
-    if (p && p.connected === false) guessCell.classList.add("offline");
 
     if (phoneLayout) {
       // Phone: per-tile header + meta to keep rows aligned.
       const nameEl = document.createElement("div");
       nameEl.className = "gName";
-      const nameTxt = (p.name || "—") + (p.emoji ? (" " + p.emoji) : "") + ((Number(p.winStreak || 0) >= 3) ? " 👑" : "");
-      nameEl.textContent = nameTxt;
+      nameEl.textContent = p.name;
 
       const guessEl = document.createElement("div");
       guessEl.className = "guessNum";
@@ -436,9 +370,7 @@ function buildRevealScene(state, opts = {}) {
       // Desktop: classic separate rows
       const nameCell = document.createElement("div");
       nameCell.className = "infoCell infoName";
-      if (p && p.connected === false) nameCell.classList.add("offline");
-      const nameTxt = (p.name || "—") + (p.emoji ? (" " + p.emoji) : "") + ((Number(p.winStreak || 0) >= 3) ? " 👑" : "");
-      nameCell.textContent = nameTxt;
+      nameCell.textContent = p.name;
       namesRow.appendChild(nameCell);
 
       guessCell.innerHTML = `<div class="guessNum">${(typeof p.lastGuess === "number") ? p.lastGuess : "—"}</div>`;
@@ -494,10 +426,6 @@ function buildRevealScene(state, opts = {}) {
       setScoreStatic(sc.el, sc.to, bad);
     }
     socket.emit("info_reveal_done", { round: state.round });
-      if (state.gameOver && state.finalStats) {
-        // Show endscreen after reveal finishes
-        renderFinalOverlay(state.finalStats);
-      }
   };
 
   if (instant) {
@@ -583,10 +511,6 @@ function buildRevealScene(state, opts = {}) {
 
   schedule(10300, () => {
     socket.emit("info_reveal_done", { round: state.round });
-      if (state.gameOver && state.finalStats) {
-        // Show endscreen after reveal finishes
-        renderFinalOverlay(state.finalStats);
-      }
   });
 }
 
@@ -630,10 +554,8 @@ socket.on("state", (state) => {
   if (state.phase !== "revealed") {
     if (lastPhase === "revealed") {
       fadeOutStageAndHide();
-      hideFinalOverlay();
     } else {
       stage.classList.add("hidden");
-      hideFinalOverlay();
       stage.classList.remove("visible");
       clearAnimTimers();
       scene.classList.remove("s1","s2","s3a","s3","s3b","s4a","s4","ready","instant","opDone");
@@ -660,10 +582,5 @@ socket.on("state", (state) => {
     const instant = state.revealReadyRound === state.round;
     const startAtMs = instant ? 0 : revealElapsedMs(state);
     buildRevealScene(state, { instant, startAtMs });
-  }
-
-  // Endscreen (game over): show after reveal is ready.
-  if (state.gameOver && state.finalStats && state.revealReadyRound === state.round) {
-    renderFinalOverlay(state.finalStats);
   }
 });
