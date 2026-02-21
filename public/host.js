@@ -18,7 +18,7 @@ document.addEventListener("DOMContentLoaded", () => {
   document.body.classList.remove("hostLocked");
 
 // Build/version label (shown bottom-left)
-const BUILD_VERSION = 'v3.0.0.94';
+const BUILD_VERSION = 'v3.0.0.97';
 const buildVersionEl = document.getElementById('buildVersion');
 if (buildVersionEl) buildVersionEl.textContent = BUILD_VERSION;
 
@@ -138,6 +138,23 @@ try{
   if (saved === "A" || saved === "B" || saved === "C" || saved === "D") playerBgMode = saved;
 }catch(e){}
 
+// Host auto-next (after totals): optional helper to automatically go to next round after reveal totals are visible.
+const autoNextSel = document.getElementById("autoNextSel");
+const LS_AUTONEXT = "tbs_auto_next_ms";
+let autoNextMs = 0;
+try{
+  autoNextMs = Number(localStorage.getItem(LS_AUTONEXT) || 0) || 0;
+}catch(e){}
+if (autoNextSel) autoNextSel.value = String(autoNextMs);
+
+autoNextSel?.addEventListener("change", () => {
+  autoNextMs = Number(autoNextSel.value || 0) || 0;
+  try{ localStorage.setItem(LS_AUTONEXT, String(autoNextMs)); }catch(e){}
+  // Emit immediately (server will ignore until host_hello).
+  try { socket.emit("host_auto_next", { ms: autoNextMs }); } catch {}
+});
+
+
 
 // Reconnect-safe: when a laptop sleeps, socket.io can reconnect with a new socket id.
 // We must re-send host_hello so the server re-marks this socket as host (otherwise host controls stop working).
@@ -148,6 +165,7 @@ socket.on("connect", () => {
   // Re-apply the chosen player BG mode (server ignores until host_hello was processed).
   setTimeout(() => {
     try { socket.emit("host_player_bg_mode", { mode: playerBgMode }); } catch {}
+    try { socket.emit("host_auto_next", { ms: autoNextMs }); } catch {}
   }, 40);
 });
 
@@ -157,6 +175,7 @@ document.addEventListener("visibilitychange", () => {
   try { socket.emit("sync"); } catch {}
   setTimeout(() => {
     try { socket.emit("host_player_bg_mode", { mode: playerBgMode }); } catch {}
+    try { socket.emit("host_auto_next", { ms: autoNextMs }); } catch {}
   }, 40);
 });
 

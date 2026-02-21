@@ -913,6 +913,106 @@ function prFmt2(n) {
   return (Math.round(n * 100) / 100).toFixed(2);
 }
 
+
+function safeText(str){
+  return String(str ?? "").replace(/[<>&]/g, s => ({ "<":"&lt;", ">":"&gt;", "&":"&amp;" }[s]));
+}
+
+function formatDisplayName(p){
+  return (p?.name || "—") + (p?.emoji ? (" " + p.emoji) : "") + ((Number(p?.winStreak || 0) >= 3) ? " 👑" : "");
+}
+
+function renderFinalOverlay(finalStats){
+  if (!infoFinalEl) return;
+  if (!finalStats || !finalStats.top3) {
+    infoFinalEl.classList.add("hidden");
+    infoFinalEl.innerHTML = "";
+    return;
+  }
+  const top = finalStats.top3 || [];
+  const badges = finalStats.badges || {};
+
+  const podium = top.map((p, idx) => {
+    const rank = idx + 1;
+    const name = safeText(formatDisplayName(p));
+    const score = (typeof p.score === "number") ? p.score : "—";
+    return `<div class="podiumItem"><div class="podiumRank">#${rank}</div><div class="podiumName">${name}</div><div class="podiumScore">${score}</div></div>`;
+  }).join("");
+
+  const badgeRow = (title, desc, w) => {
+    const name = w ? safeText((w.name || "—") + (w.emoji ? (" " + w.emoji) : "")) : "—";
+    return `<div class="badge"><div class="badgeLeft"><div class="badgeTitle">${safeText(title)}</div><div class="badgeDesc">${safeText(desc)}</div></div><div class="badgeWinner">${name}</div></div>`;
+  };
+
+  infoFinalEl.innerHTML = `
+    <div class="finalCard">
+      <div class="finalTitle">Eindscores</div>
+      <div class="finalGrid">
+        <div class="finalCol">
+          <div class="finalColTitle">Top 3</div>
+          <div class="podium">${podium || ""}</div>
+        </div>
+        <div class="finalCol">
+          <div class="finalColTitle">MVP momenten</div>
+          <div class="badgeList">
+            ${badgeRow("Closest overall", "Gemiddeld het dichtst bij Target", badges.closestOverall)}
+            ${badgeRow("Closest to average", "Gemiddeld het dichtst bij Gemiddelde", badges.closestToAverage)}
+            ${badgeRow("Most wins", "Meeste rondes gewonnen", badges.mostWins)}
+            ${badgeRow("Best streak", "Langste win-streak", badges.bestStreak)}
+            ${badgeRow("Most chaotic", "Grootste spreiding", badges.mostChaotic)}
+            ${badgeRow("Most consistent", "Meest consistent", badges.mostConsistent)}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  infoFinalEl.classList.remove("hidden");
+}
+
+function hideFinalOverlay(){
+  if (!infoFinalEl) return;
+  infoFinalEl.classList.add("hidden");
+  infoFinalEl.innerHTML = "";
+}
+
+function renderFinalSummary(finalStats){
+  if (!finalSummaryEl) return;
+  if (!finalStats || !finalStats.top3) {
+    finalSummaryEl.classList.add("hidden");
+    finalSummaryEl.innerHTML = "";
+    return;
+  }
+
+  const top = finalStats.top3 || [];
+  const badges = finalStats.badges || {};
+  const topHtml = top.map((p, idx)=> {
+    return `<div class="fsTopItem"><div class="fsRank">#${idx+1}</div><div class="fsName">${safeText(formatDisplayName(p))}</div><div class="fsScore">${(typeof p.score === "number") ? p.score : "—"}</div></div>`;
+  }).join("");
+
+  const badgeLine = (label, w) => {
+    const name = w ? safeText((w.name || "—") + (w.emoji ? (" " + w.emoji) : "")) : "—";
+    return `<div class="fsBadge"><span>${safeText(label)}</span>${name}</div>`;
+  };
+
+  finalSummaryEl.innerHTML = `
+    <div class="fsTitle">Eindscores</div>
+    <div class="fsTop">${topHtml}</div>
+    <div class="fsBadges">
+      ${badgeLine("Closest overall", badges.closestOverall)}
+      ${badgeLine("Closest avg", badges.closestToAverage)}
+      ${badgeLine("Most wins", badges.mostWins)}
+      ${badgeLine("Best streak", badges.bestStreak)}
+    </div>
+  `;
+  finalSummaryEl.classList.remove("hidden");
+}
+
+function hideFinalSummary(){
+  if (!finalSummaryEl) return;
+  finalSummaryEl.classList.add("hidden");
+  finalSummaryEl.innerHTML = "";
+}
+
 function prSetScoreStatic(el, value, isBad) {
   el.innerHTML = `<div class="scoreNum live ${isBad ? "bad" : "good"}">${value}</div>`;
 }

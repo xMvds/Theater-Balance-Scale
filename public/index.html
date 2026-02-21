@@ -23,6 +23,14 @@
         <div class="joinBox">
           <div class="joinHint">Vul je naam in om te joinen</div>
           <input id="nameInput" class="input" placeholder="Jouw naam" maxlength="18" autofocus/>
+          <select id="emojiSelect" class="input" aria-label="Emoji">
+            <option value="">(geen emoji)</option>
+            <option value="🎭">🎭</option>
+            <option value="🔥">🔥</option>
+            <option value="🍀">🍀</option>
+            <option value="⭐">⭐</option>
+            <option value="👑">👑</option>
+          </select>
           <button id="joinBtn" class="btn primary">Join</button>
         </div>
       </div>
@@ -52,7 +60,8 @@
                   <div id="tiles" class="tiles"></div>
                 </div>
                 <div id="playerMathRow" class="mathRow hidden"></div>
-              </div>
+                <div id="finalSummary" class="finalSummary hidden"></div>
+</div>
             </div>
           </div>
 
@@ -95,7 +104,9 @@
               <div class="mathValue" id="infoTargetVal">—</div>
             </div>
           </div>
+          <div id="infoRecap" class="infoRecap hidden"></div>
         </div>
+        <div id="infoFinal" class="infoFinal hidden"></div>
       </div>
     </div>
   </div>

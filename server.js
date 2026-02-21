@@ -80,6 +80,10 @@ const game = {
 
   // When true, the game has ended (only 0-1 players alive). Host can only reset.
   gameOver: false,
+
+  // Host auto-next (optional): after totals are shown, auto-advance after a delay.
+  autoNextDelayMs: 0, // 0 = off
+  autoNextAt: null,   // epoch ms when auto-next will fire
 };
 
 // Reveal timing (must match the front-end timelines)
@@ -91,6 +95,7 @@ const PLAYER_REVEAL_TOTAL_MS = 12000; // ms
 // Keep this aligned with public/host.js (HOST_SCOREBOARD_LOCK_MS).
 const HOST_SCOREBOARD_LOCK_MS = 1400; // ms
 let revealReadyTimer = null;
+let autoNextTimer = null;
 
 // Allow dev fill from player debug UI only when explicitly enabled.
 const DEBUG_DEVFILL = process.env.DEBUG_DEVFILL === "1";
@@ -116,7 +121,56 @@ function clearRevealSync() {
   game.revealDriver = null;
   game.revealStartedAt = null;
   game.revealDurationMs = null;
+  cancelAutoNext();
   clearRevealReady();
+}
+
+
+function cancelAutoNext() {
+  if (autoNextTimer) {
+    clearTimeout(autoNextTimer);
+    autoNextTimer = null;
+  }
+  game.autoNextAt = null;
+}
+
+// Auto-next must trigger *after totals are visible*, not after the full reveal is over.
+// This matches the front-end timelines (info.js / client.js): totals lock-in at ~8500ms.
+const TOTALS_AT_MS = 8500;
+
+function scheduleAutoNextAfterTotals(round) {
+  cancelAutoNext();
+
+  const delay = Number(game.autoNextDelayMs || 0);
+  if (!Number.isFinite(delay) || delay <= 0) return;
+  if (game.gameOver) return;
+  if (game.phase !== "revealed") return;
+  if (round !== game.round) return;
+
+  const now = Date.now();
+  const rs = (typeof game.revealStartedAt === "number" && Number.isFinite(game.revealStartedAt))
+    ? game.revealStartedAt
+    : now;
+
+  // Fire after totals moment (or immediately if we're already past it), plus chosen delay.
+  const base = Math.max(now, rs + TOTALS_AT_MS);
+  const fireAt = base + delay;
+
+  game.autoNextAt = fireAt;
+
+  autoNextTimer = setTimeout(() => {
+    // Guard: only if we're still in the same reveal.
+    if (game.phase !== "revealed") return;
+    if (game.gameOver) return;
+    if (game.round !== round) return;
+
+    game.phase = "collecting";
+    game.round += 1;
+    clearRevealSync();
+    resetForNewRound();
+    setRoundRulesSnapshot();
+    broadcastState();
+  }, Math.max(0, fireAt - now));
 }
 
 
@@ -219,6 +273,8 @@ function makeStatePayload() {
     lastRound: game.lastRound,
     revealReadyRound: game.revealReadyRound,
     gameOver: game.gameOver,
+    autoNextDelayMs: game.autoNextDelayMs || 0,
+    autoNextAt: game.autoNextAt || null,
   };
 }
 
@@ -356,6 +412,8 @@ function kickAll() {
   game.roundRules = null;
   game.ruleIntro = null;
   game.gameOver = false;
+  game.autoNextDelayMs = 0;
+  game.autoNextAt = null;
   clearRevealSync();
   broadcastState();
 }
@@ -457,6 +515,20 @@ socket.on("host_player_bg_mode", ({ mode } = {}) => {
     game.playerFinisherConfigs[k] = out;
     broadcastState();
   });
+
+
+  // Host can enable auto-next after totals (flow helper).
+  socket.on("host_auto_next", ({ ms } = {}) => {
+    if (!socket.data.isHost) return;
+    const n = Number(ms);
+    game.autoNextDelayMs = (Number.isFinite(n) && n >= 0 && n <= 60000) ? Math.round(n) : 0;
+
+    // If we're currently revealing, re-plan immediately.
+    if (game.phase === "revealed") scheduleAutoNextAfterTotals(game.round);
+
+    broadcastState();
+  });
+
 
 
 
@@ -621,6 +693,9 @@ socket.on("join", ({ name, playerKey }) => {
         markRevealReady(game.round);
       }
     }, game.revealDurationMs);
+
+    // Optional auto-next: schedule only after totals are visible.
+    scheduleAutoNextAfterTotals(game.round);
 
     broadcastState();
   });
